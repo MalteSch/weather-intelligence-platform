@@ -34,6 +34,20 @@ backend/
 dashboard/
 
 docs/
+```
+
+## Local configuration
+
+Create a `secrets.h` file in the project root:
+
+```cpp
+#pragma once
+
+const char* WIFI_SSID = "your_wifi_name";
+const char* WIFI_PASSWORD = "your_password";
+```
+
+This file is intentionally excluded from Git via `.gitignore`.
 
 ## Example sensor output
 
