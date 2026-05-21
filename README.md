@@ -34,3 +34,13 @@ backend/
 dashboard/
 
 docs/
+
+## Example sensor output
+
+```json
+{
+  "temperatureCelsius": 26.74,
+  "pressureHpa": 1016.79,
+  "sensor": "BMP280"
+}
+```
