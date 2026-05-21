@@ -55,6 +55,13 @@ void loop() {
   Serial.print(pressure, 2);
   Serial.print(",");
   Serial.print("\"sensor\":\"BMP280\"");
+  Serial.print(",");
+  Serial.print("\"wifiIp\":\"");
+  Serial.print(WiFi.localIP());
+  Serial.print("\"");
+  Serial.print(",");
+  Serial.print("\"wifiRssiDbm\":");
+  Serial.print(WiFi.RSSI());
   Serial.println("}");
 
   delay(MEASUREMENT_INTERVAL_MS);

@@ -16,7 +16,7 @@ Personal weather station and backend learning project based on ESP32.
 - [x] Sensor communication
 - [x] JSON output
 - [x] GitHub repository setup
-- [ ] WiFi connectivity
+- [X] WiFi connectivity
 - [ ] OLED display
 - [ ] BME280 integration
 - [ ] Backend API
@@ -53,8 +53,10 @@ This file is intentionally excluded from Git via `.gitignore`.
 
 ```json
 {
-  "temperatureCelsius": 26.74,
-  "pressureHpa": 1016.79,
-  "sensor": "BMP280"
+  "temperatureCelsius":26.42,
+  "pressureHpa":1016.81,
+  "sensor":"BMP280",
+  "wifiIp":"192.168.0.123",
+  "wifiRssiDbm":-54
 }
 ```
