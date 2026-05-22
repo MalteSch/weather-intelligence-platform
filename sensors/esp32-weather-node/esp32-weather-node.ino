@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <Adafruit_BMP280.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
 
 Adafruit_BMP280 bmp;
 
@@ -64,5 +65,26 @@ void loop() {
   Serial.print(WiFi.RSSI());
   Serial.println("}");
 
+  HTTPClient http;
+
+  http.begin(API_URL);
+  http.addHeader("Content-Type", "application/json");
+
+  String payload = "{";
+  payload += "\"temperatureCelsius\":";
+  payload += String(temperature, 2);
+  payload += ",";
+  payload += "\"pressureHpa\":";
+  payload += String(pressure, 2);
+  payload += "}";
+
+  int httpResponseCode = http.POST(payload);
+
+  Serial.print("{\"httpStatus\":");
+  Serial.print(httpResponseCode);
+  Serial.println("}");
+
+  http.end();
+  
   delay(MEASUREMENT_INTERVAL_MS);
 }

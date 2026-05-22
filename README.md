@@ -65,7 +65,10 @@ Create a local `secrets.h` file in the project root:
 
 const char* WIFI_SSID = "your_wifi_name";
 const char* WIFI_PASSWORD = "your_wifi_password";
+const char* API_URL = "https://httpbin.org/post";
 ```
+
+`API_URL` defines the endpoint used by the ESP32 to upload weather measurements. During development this can point to a test endpoint such as httpbin. Later it will point to the local backend API.
 
 A public template is provided as:
 
