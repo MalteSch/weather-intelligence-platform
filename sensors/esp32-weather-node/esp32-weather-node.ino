@@ -1,11 +1,14 @@
 #include "../../secrets.h"
 #include <Wire.h>
 #include <Adafruit_BMP280.h>
+#include <BH1750.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 
 Adafruit_BMP280 bmp;
+BH1750 lightMeter;
 
+const int STATUS_LED_PIN = 2;
 const int SDA_PIN = 21;
 const int SCL_PIN = 22;
 const int MEASUREMENT_INTERVAL_MS = 5000;
@@ -29,7 +32,7 @@ void connectToWiFi() {
   Serial.println("\"}");
 }
 
-String buildWeatherPayload(float temperature, float pressure) {
+String buildWeatherPayload(float temperature, float pressure, float lightLevelLux) {
   String payload = "{";
 
   payload += "\"temperatureCelsius\":";
@@ -49,6 +52,10 @@ String buildWeatherPayload(float temperature, float pressure) {
   payload += "\"wifiRssiDbm\":";
   payload += String(WiFi.RSSI());
 
+  payload += ",";
+  payload += "\"lightLevelLux\":";
+  payload += String(lightLevelLux, 2);
+
   payload += "}";
 
   return payload;
@@ -66,6 +73,12 @@ void sendWeatherPayload(String payload) {
 
   int httpResponseCode = http.POST(payload);
 
+  if (httpResponseCode > 0) {
+  digitalWrite(STATUS_LED_PIN, HIGH);
+  delay(100);
+  digitalWrite(STATUS_LED_PIN, LOW);
+  }
+
   Serial.print("{\"httpStatus\":");
   Serial.print(httpResponseCode);
   Serial.println("}");
@@ -76,7 +89,10 @@ void sendWeatherPayload(String payload) {
 void setup() {
   Serial.begin(115200);
 
+  pinMode(STATUS_LED_PIN, OUTPUT);
+
   Wire.begin(SDA_PIN, SCL_PIN);
+  lightMeter.begin();
 
   connectToWiFi();
 
@@ -94,8 +110,13 @@ void setup() {
 void loop() {
   float temperature = bmp.readTemperature();
   float pressure = bmp.readPressure() / 100.0;
+  float lightLevelLux = lightMeter.readLightLevel();
 
-  String payload = buildWeatherPayload(temperature, pressure);
+  String payload = buildWeatherPayload(
+    temperature,
+    pressure,
+    lightLevelLux
+  );
 
   printJson(payload);
   sendWeatherPayload(payload);
