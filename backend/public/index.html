@@ -23,8 +23,15 @@
       background: #1e293b;
       border-radius: 12px;
       padding: 24px;
-      max-width: 500px;
+      max-width: 800px;
+      margin-bottom: 24px;
       box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .value-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 20px;
     }
 
     .value {
@@ -42,32 +49,75 @@
       color: #94a3b8;
       font-size: 0.85rem;
     }
+
+    canvas {
+      max-height: 320px;
+    }
   </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
   <h1>Weather Intelligence Platform</h1>
 
   <div class="card">
-    <div class="label">Temperature</div>
-    <div class="value" id="temperature">-- °C</div>
+    <div class="value-grid">
+      <div>
+        <div class="label">Temperature</div>
+        <div class="value" id="temperature">-- °C</div>
+      </div>
 
-    <div class="label">Pressure</div>
-    <div class="value" id="pressure">-- hPa</div>
+      <div>
+        <div class="label">Pressure</div>
+        <div class="value" id="pressure">-- hPa</div>
+      </div>
 
-    <div class="label">WiFi Signal</div>
-    <div class="value" id="wifi">-- dBm</div>
+      <div>
+        <div class="label">Light</div>
+        <div class="value" id="light">-- lux</div>
+      </div>
+
+      <div>
+        <div class="label">WiFi Signal</div>
+        <div class="value" id="wifi">-- dBm</div>
+      </div>
+    </div>
 
     <div class="updated" id="updated">
       Waiting for data...
     </div>
   </div>
 
+  <div class="card">
+    <canvas id="temperatureChart"></canvas>
+  </div>
+
+  <div class="card">
+    <canvas id="lightChart"></canvas>
+  </div>
+
   <script>
+    let temperatureChart;
+    let lightChart;
+
     async function loadWeatherData() {
+      const response = await fetch("/weather/latest");
+      return await response.json();
+    }
+
+    async function loadWeatherHistory() {
+      const response = await fetch("/weather/history");
+      return await response.json();
+    }
+
+    function formatTime(timestamp) {
+      return new Date(timestamp).toLocaleTimeString();
+    }
+
+    async function renderCurrentValues() {
       try {
-        const response = await fetch("/weather/latest");
-        const data = await response.json();
+        const data = await loadWeatherData();
 
         document.getElementById("temperature").innerText =
           `${data.temperatureCelsius} °C`;
@@ -75,19 +125,110 @@
         document.getElementById("pressure").innerText =
           `${data.pressureHpa} hPa`;
 
+        document.getElementById("light").innerText =
+          `${data.lightLevelLux} lux`;
+
         document.getElementById("wifi").innerText =
           `${data.wifiRssiDbm} dBm`;
 
         document.getElementById("updated").innerText =
-          `Updated: ${data.receivedAt}`;
+          `Updated: ${formatTime(data.receivedAt)}`;
       } catch (error) {
-        console.error(error);
+        console.error("Failed to load latest weather data:", error);
       }
     }
 
-    loadWeatherData();
+    async function renderCharts() {
+      try {
+        const history = await loadWeatherHistory();
+        const reversedHistory = [...history].reverse();
 
-    setInterval(loadWeatherData, 5000);
+        const labels = reversedHistory.map((entry) =>
+          formatTime(entry.receivedAt)
+        );
+
+        const temperatures = reversedHistory.map(
+          (entry) => entry.temperatureCelsius
+        );
+
+        const lightLevels = reversedHistory.map(
+          (entry) => entry.lightLevelLux
+        );
+
+        renderTemperatureChart(labels, temperatures);
+        renderLightChart(labels, lightLevels);
+      } catch (error) {
+        console.error("Failed to load weather history:", error);
+      }
+    }
+
+    function renderTemperatureChart(labels, temperatures) {
+      const context = document
+        .getElementById("temperatureChart")
+        .getContext("2d");
+
+    if (temperatureChart) {
+        temperatureChart.data.labels = labels;
+        temperatureChart.data.datasets[0].data = temperatures;
+        temperatureChart.update("none");
+        return;
+    }
+
+      temperatureChart = new Chart(context, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Temperature °C",
+              data: temperatures,
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+        },
+      });
+    }
+
+    function renderLightChart(labels, lightLevels) {
+      const context = document
+        .getElementById("lightChart")
+        .getContext("2d");
+
+        if (lightChart) {
+            lightChart.data.labels = labels;
+            lightChart.data.datasets[0].data = lightLevels;
+            lightChart.update("none");
+            return;
+        }
+
+      lightChart = new Chart(context, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Light level lux",
+              data: lightLevels,
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+        },
+      });
+    }
+
+    async function refreshDashboard() {
+      await renderCurrentValues();
+      await renderCharts();
+    }
+
+    refreshDashboard();
+    setInterval(refreshDashboard, 5000);
   </script>
 
 </body>
