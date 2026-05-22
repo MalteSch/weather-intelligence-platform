@@ -2,7 +2,7 @@
 
 Personal weather station and backend learning project based on ESP32.
 
-The goal of this project is to collect local weather data from real sensors, send it to backend services and later generate AI-supported weather insights based on historical measurements and trends.
+The goal of this project is to collect local weather data from real sensors, send it to backend services, store measurements persistently and later generate AI-supported weather insights based on historical measurements and trends.
 
 ---
 
@@ -27,13 +27,16 @@ The goal of this project is to collect local weather data from real sensors, sen
 - [x] WiFi connectivity
 - [x] HTTP sensor uploads
 - [x] Local backend API
+- [x] SQLite persistence
+- [x] Latest measurement endpoint
+- [x] Measurement history endpoint
 - [x] Live dashboard
 - [x] Local secrets handling
 - [x] LED upload status indicator
 - [x] GitHub repository setup
+- [ ] Chart.js dashboard charts
 - [ ] BME280 integration
 - [ ] OLED display
-- [ ] Historical data storage
 - [ ] OTA updates
 - [ ] AI forecast generation
 
@@ -45,12 +48,31 @@ The goal of this project is to collect local weather data from real sensors, sen
 {
   "temperatureCelsius": 27.71,
   "pressureHpa": 1018.26,
-  "sensor": "BMP280",
   "wifiIp": "192.168.0.148",
   "wifiRssiDbm": -71,
   "lightLevelLux": 28.33
 }
 ```
+
+---
+
+# Backend API
+
+## POST `/weather`
+
+Receives weather measurements from the ESP32 sensor node and stores them in SQLite.
+
+## GET `/weather/latest`
+
+Returns the latest received weather measurement.
+
+## GET `/weather/history`
+
+Returns the latest stored measurements for dashboard visualization and trend analysis.
+
+## GET `/health`
+
+Simple backend health check endpoint.
 
 ---
 
@@ -62,6 +84,9 @@ sensors/
 
 backend/
   public/
+  database.js
+  server.js
+  weather.db
 
 docs/
 
@@ -94,11 +119,6 @@ secrets.example.h
 
 `API_URL` defines the endpoint used by the ESP32 to upload weather measurements.
 
-During development this can point to:
-- a public test endpoint
-- a local backend server
-- later potentially a cloud API
-
 ---
 
 # Hardware
@@ -120,36 +140,23 @@ During development this can point to:
 
 ---
 
-# Backend API
-
-## POST `/weather`
-
-Receives weather measurements from the ESP32 sensor node.
-
-## GET `/weather/latest`
-
-Returns the latest received weather measurement.
-
-## GET `/health`
-
-Simple backend health check endpoint.
-
----
-
 # Dashboard
 
 The dashboard currently displays:
 
 - Temperature
 - Pressure
+- Light level
 - WiFi signal strength
 - Last update timestamp
 
-Planned:
-- historical charts
-- light visualization
-- outdoor status
-- device health monitoring
+Planned next:
+
+- Temperature history chart
+- Light level history chart
+- Pressure history chart
+- Device status indicators
+- Outdoor operation status
 
 ---
 
@@ -158,22 +165,25 @@ Planned:
 ## Phase 1: Sensor node
 
 - Read temperature and pressure
+- Read light level
 - Output structured JSON
 - Connect to WiFi
-- Add light sensor support
+- Upload measurements via HTTP
 - Add humidity support via BME280
 - Display current values on OLED
 
 ## Phase 2: Backend
 
-- Send weather data via HTTP
-- Store incoming measurements
+- Receive weather data via HTTP
+- Store incoming measurements in SQLite
 - Provide latest and historical weather data through an API
+- Add input validation
+- Add basic error handling and retries
 
 ## Phase 3: Dashboard
 
 - Display current weather values
-- Visualize historical trends
+- Visualize historical trends with Chart.js
 - Show sensor and connectivity status
 - Auto-refresh live values
 
@@ -194,7 +204,7 @@ Planned:
 
 ## Phase 6: Data & intelligence
 
-- Historical measurement storage
+- Historical measurement analysis
 - Weather trend visualization
 - AI-supported weather summaries
 - Forecast comparison
@@ -208,6 +218,7 @@ The project intentionally combines:
 - Embedded development
 - Networking
 - Backend APIs
+- SQLite persistence
 - Frontend dashboards
 - Dev tooling
 - Git/GitHub workflows

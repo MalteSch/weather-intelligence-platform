@@ -42,8 +42,6 @@ String buildWeatherPayload(float temperature, float pressure, float lightLevelLu
   payload += "\"pressureHpa\":";
   payload += String(pressure, 2);
   payload += ",";
-
-  payload += "\"sensor\":\"BMP280\",";
   
   payload += "\"wifiIp\":\"";
   payload += WiFi.localIP().toString();
