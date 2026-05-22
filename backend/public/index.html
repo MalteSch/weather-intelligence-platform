@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Weather Intelligence Platform</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      margin: 0;
+      padding: 40px;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 500px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .value {
+      font-size: 2rem;
+      margin-bottom: 16px;
+    }
+
+    .label {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .updated {
+      margin-top: 20px;
+      color: #94a3b8;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Weather Intelligence Platform</h1>
+
+  <div class="card">
+    <div class="label">Temperature</div>
+    <div class="value" id="temperature">-- °C</div>
+
+    <div class="label">Pressure</div>
+    <div class="value" id="pressure">-- hPa</div>
+
+    <div class="label">WiFi Signal</div>
+    <div class="value" id="wifi">-- dBm</div>
+
+    <div class="updated" id="updated">
+      Waiting for data...
+    </div>
+  </div>
+
+  <script>
+    async function loadWeatherData() {
+      try {
+        const response = await fetch("/weather/latest");
+        const data = await response.json();
+
+        document.getElementById("temperature").innerText =
+          `${data.temperatureCelsius} °C`;
+
+        document.getElementById("pressure").innerText =
+          `${data.pressureHpa} hPa`;
+
+        document.getElementById("wifi").innerText =
+          `${data.wifiRssiDbm} dBm`;
+
+        document.getElementById("updated").innerText =
+          `Updated: ${data.receivedAt}`;
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    loadWeatherData();
+
+    setInterval(loadWeatherData, 5000);
+  </script>
+
+</body>
+</html>
