@@ -29,13 +29,60 @@ void connectToWiFi() {
   Serial.println("\"}");
 }
 
+String buildWeatherPayload(float temperature, float pressure) {
+  String payload = "{";
+
+  payload += "\"temperatureCelsius\":";
+  payload += String(temperature, 2);
+  payload += ",";
+
+  payload += "\"pressureHpa\":";
+  payload += String(pressure, 2);
+  payload += ",";
+
+  payload += "\"sensor\":\"BMP280\",";
+  
+  payload += "\"wifiIp\":\"";
+  payload += WiFi.localIP().toString();
+  payload += "\",";
+  
+  payload += "\"wifiRssiDbm\":";
+  payload += String(WiFi.RSSI());
+
+  payload += "}";
+
+  return payload;
+}
+
+void printJson(String json) {
+  Serial.println(json);
+}
+
+void sendWeatherPayload(String payload) {
+  HTTPClient http;
+
+  http.begin(API_URL);
+  http.addHeader("Content-Type", "application/json");
+
+  int httpResponseCode = http.POST(payload);
+
+  Serial.print("{\"httpStatus\":");
+  Serial.print(httpResponseCode);
+  Serial.println("}");
+
+  http.end();
+}
+
 void setup() {
   Serial.begin(115200);
+
   Wire.begin(SDA_PIN, SCL_PIN);
+
   connectToWiFi();
 
   if (!bmp.begin(SENSOR_ADDRESS)) {
     Serial.println("{\"status\":\"error\",\"message\":\"BMP280 not found\"}");
+
     while (true) {
       delay(1000);
     }
@@ -48,43 +95,10 @@ void loop() {
   float temperature = bmp.readTemperature();
   float pressure = bmp.readPressure() / 100.0;
 
-  Serial.print("{");
-  Serial.print("\"temperatureCelsius\":");
-  Serial.print(temperature, 2);
-  Serial.print(",");
-  Serial.print("\"pressureHpa\":");
-  Serial.print(pressure, 2);
-  Serial.print(",");
-  Serial.print("\"sensor\":\"BMP280\"");
-  Serial.print(",");
-  Serial.print("\"wifiIp\":\"");
-  Serial.print(WiFi.localIP());
-  Serial.print("\"");
-  Serial.print(",");
-  Serial.print("\"wifiRssiDbm\":");
-  Serial.print(WiFi.RSSI());
-  Serial.println("}");
+  String payload = buildWeatherPayload(temperature, pressure);
 
-  HTTPClient http;
+  printJson(payload);
+  sendWeatherPayload(payload);
 
-  http.begin(API_URL);
-  http.addHeader("Content-Type", "application/json");
-
-  String payload = "{";
-  payload += "\"temperatureCelsius\":";
-  payload += String(temperature, 2);
-  payload += ",";
-  payload += "\"pressureHpa\":";
-  payload += String(pressure, 2);
-  payload += "}";
-
-  int httpResponseCode = http.POST(payload);
-
-  Serial.print("{\"httpStatus\":");
-  Serial.print(httpResponseCode);
-  Serial.println("}");
-
-  http.end();
-  
   delay(MEASUREMENT_INTERVAL_MS);
 }
