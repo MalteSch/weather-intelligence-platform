@@ -98,14 +98,45 @@ app.post("/weather", (req, res) => {
 });
 
 app.get("/weather/latest", (req, res) => {
-  if (!latestWeatherData) {
-    return res.status(404).json({
-      status: "error",
-      message: "No weather data received yet",
-    });
-  }
+  const query = `
+    SELECT
+      id,
+      temperature_celsius,
+      pressure_hpa,
+      light_level_lux,
+      wifi_rssi_dbm,
+      received_at
+    FROM weather_measurements
+    ORDER BY received_at DESC
+    LIMIT 1
+  `;
 
-  res.status(200).json(latestWeatherData);
+  db.get(query, [], (error, row) => {
+    if (error) {
+      console.error("Failed to load latest weather data:", error.message);
+
+      return res.status(500).json({
+        status: "error",
+        message: "Failed to load latest weather data",
+      });
+    }
+
+    if (!row) {
+      return res.status(404).json({
+        status: "error",
+        message: "No weather data received yet",
+      });
+    }
+
+    res.status(200).json({
+      id: row.id,
+      temperatureCelsius: row.temperature_celsius,
+      pressureHpa: row.pressure_hpa,
+      lightLevelLux: row.light_level_lux,
+      wifiRssiDbm: row.wifi_rssi_dbm,
+      receivedAt: row.received_at,
+    });
+  });
 });
 
 app.get("/weather/history", (req, res) => {
