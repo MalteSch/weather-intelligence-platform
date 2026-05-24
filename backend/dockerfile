@@ -6,7 +6,9 @@ COPY package*.json ./
 
 RUN npm install --omit=dev
 
-COPY . .
+COPY server.js ./
+COPY database.js ./
+COPY public ./public
 
 RUN mkdir -p /app/data
 
