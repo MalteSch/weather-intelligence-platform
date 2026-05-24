@@ -53,6 +53,50 @@
     canvas {
       max-height: 320px;
     }
+
+    .time-controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background: #334155;
+      color: #e2e8f0;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #475569;
+    }
+
+    .custom-range {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+
+    .custom-range label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    input {
+      background: #0f172a;
+      color: #e2e8f0;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 8px;
+    }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -90,6 +134,31 @@
   </div>
 
   <div class="card">
+    <div class="label">Time range</div>
+
+    <div class="time-controls">
+      <button onclick="setPresetRange(12)">12h</button>
+      <button onclick="setPresetRange(24)">24h</button>
+      <button onclick="setPresetRange(72)">3 days</button>
+      <button onclick="setPresetRange(168)">7 days</button>
+    </div>
+
+    <div class="custom-range">
+      <label>
+        From
+        <input type="datetime-local" id="customFrom" />
+      </label>
+
+      <label>
+        To
+        <input type="datetime-local" id="customTo" />
+      </label>
+
+      <button onclick="applyCustomRange()">Apply</button>
+    </div>
+  </div>
+
+  <div class="card">
     <canvas id="temperatureChart"></canvas>
   </div>
 
@@ -100,6 +169,8 @@
   <script>
     let temperatureChart;
     let lightChart;
+    let selectedFrom = null;
+    let selectedTo = null;
 
     async function loadWeatherData() {
       const response = await fetch("/weather/latest");
@@ -107,8 +178,41 @@
     }
 
     async function loadWeatherHistory() {
-      const response = await fetch("/weather/history");
+      let url = "/weather/history";
+
+      if (selectedFrom && selectedTo) {
+        const params = new URLSearchParams({
+          from: selectedFrom.toISOString(),
+          to: selectedTo.toISOString(),
+        });
+
+        url += `?${params.toString()}`;
+      }
+
+      const response = await fetch(url);
       return await response.json();
+    }
+
+    function setPresetRange(hours) {
+      selectedTo = new Date();
+      selectedFrom = new Date(selectedTo.getTime() - hours * 60 * 60 * 1000);
+
+      refreshDashboard();
+    }
+
+    function applyCustomRange() {
+      const fromValue = document.getElementById("customFrom").value;
+      const toValue = document.getElementById("customTo").value;
+
+      if (!fromValue || !toValue) {
+        alert("Please select both start and end time.");
+        return;
+      }
+
+      selectedFrom = new Date(fromValue);
+      selectedTo = new Date(toValue);
+
+      refreshDashboard();
     }
 
     function formatTime(timestamp) {
@@ -227,7 +331,7 @@
       await renderCharts();
     }
 
-    refreshDashboard();
+    setPresetRange(12);
     setInterval(refreshDashboard, 5000);
   </script>
 
