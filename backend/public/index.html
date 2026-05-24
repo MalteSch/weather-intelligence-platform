@@ -270,12 +270,12 @@
         );
 
         const temperaturePoints = reversedHistory.map((entry) => ({
-          x: entry.receivedAt,
+          x: new Date(entry.receivedAt).getTime(),
           y: entry.temperatureCelsius,
         }));
 
         const lightPoints = reversedHistory.map((entry) => ({
-          x: entry.receivedAt,
+          x: new Date(entry.receivedAt).getTime(),
           y: entry.lightLevelLux,
         }));
 
