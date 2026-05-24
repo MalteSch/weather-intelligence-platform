@@ -1,0 +1,9 @@
+services:
+  weather-backend:
+    image: ghcr.io/maltesch/weather-backend:latest
+    container_name: weather_backend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

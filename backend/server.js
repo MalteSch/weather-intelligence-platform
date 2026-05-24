@@ -11,7 +11,40 @@ let latestWeatherData = null;
 
 app.use(express.json());
 
+function validateWeatherMeasurement(payload) {
+  const errors = [];
+
+  if (typeof payload.temperatureCelsius !== "number") {
+    errors.push("temperatureCelsius must be a number");
+  }
+
+  if (typeof payload.pressureHpa !== "number") {
+    errors.push("pressureHpa must be a number");
+  }
+
+  if (typeof payload.lightLevelLux !== "number") {
+    errors.push("lightLevelLux must be a number");
+  }
+
+  if (typeof payload.wifiRssiDbm !== "number") {
+    errors.push("wifiRssiDbm must be a number");
+  }
+
+  return errors;
+}
+
 app.post("/weather", (req, res) => {
+  const validationErrors = validateWeatherMeasurement(req.body);
+
+  if (validationErrors.length > 0) {
+    console.error("Invalid weather payload:", validationErrors);
+
+    return res.status(400).json({
+      status: "error",
+      errors: validationErrors,
+    });
+  }
+
   const measurement = {
     ...req.body,
     receivedAt: new Date().toISOString(),

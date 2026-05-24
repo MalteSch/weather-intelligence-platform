@@ -1,6 +1,6 @@
 const sqlite3 = require("sqlite3").verbose();
 
-const db = new sqlite3.Database("weather.db", (error) => {
+const db = new sqlite3.Database("data/weather.db", (error) => {
   if (error) {
     console.error("Database connection failed:", error.message);
     return;
