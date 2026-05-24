@@ -1,195 +1,378 @@
-<script>
-  let temperatureChart;
-  let lightChart;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  let selectedFrom = null;
-  let selectedTo = null;
+  <title>Weather Intelligence Platform</title>
 
-  async function loadWeatherData() {
-    const response = await fetch("/weather/latest");
-    return await response.json();
-  }
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      margin: 0;
+      padding: 40px;
+    }
 
-  async function loadWeatherHistory() {
-    let url = "/weather/history";
+    h1 {
+      margin-bottom: 30px;
+    }
 
-    if (selectedFrom && selectedTo) {
-      const params = new URLSearchParams({
-        from: selectedFrom.toISOString(),
-        to: selectedTo.toISOString(),
+    .card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 900px;
+      margin-bottom: 24px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .value-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 20px;
+    }
+
+    .value {
+      font-size: 2rem;
+      margin-bottom: 16px;
+    }
+
+    .label {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .updated {
+      margin-top: 20px;
+      color: #94a3b8;
+      font-size: 0.85rem;
+    }
+
+    canvas {
+      max-height: 320px;
+    }
+
+    .time-controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background: #334155;
+      color: #e2e8f0;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #475569;
+    }
+
+    .custom-range {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+
+    .custom-range label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    input {
+      background: #0f172a;
+      color: #e2e8f0;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 8px;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <h1>Weather Intelligence Platform</h1>
+
+  <div class="card">
+    <div class="value-grid">
+      <div>
+        <div class="label">Temperature</div>
+        <div class="value" id="temperature">-- °C</div>
+      </div>
+
+      <div>
+        <div class="label">Pressure</div>
+        <div class="value" id="pressure">-- hPa</div>
+      </div>
+
+      <div>
+        <div class="label">Light</div>
+        <div class="value" id="light">-- lux</div>
+      </div>
+
+      <div>
+        <div class="label">WiFi Signal</div>
+        <div class="value" id="wifi">-- dBm</div>
+      </div>
+    </div>
+
+    <div class="updated" id="updated">
+      Waiting for data...
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Time range</div>
+
+    <div class="time-controls">
+      <button onclick="setPresetRange(12)">12h</button>
+      <button onclick="setPresetRange(24)">24h</button>
+      <button onclick="setPresetRange(72)">3 days</button>
+      <button onclick="setPresetRange(168)">7 days</button>
+    </div>
+
+    <div class="custom-range">
+      <label>
+        From
+        <input type="datetime-local" id="customFrom" />
+      </label>
+
+      <label>
+        To
+        <input type="datetime-local" id="customTo" />
+      </label>
+
+      <button onclick="applyCustomRange()">Apply</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <canvas id="temperatureChart"></canvas>
+  </div>
+
+  <div class="card">
+    <canvas id="lightChart"></canvas>
+  </div>
+
+  <script>
+    let temperatureChart;
+    let lightChart;
+
+    let selectedFrom = null;
+    let selectedTo = null;
+
+    async function loadWeatherData() {
+      const response = await fetch("/weather/latest");
+
+      if (!response.ok) {
+        throw new Error(`Latest weather request failed: ${response.status}`);
+      }
+
+      return await response.json();
+    }
+
+    async function loadWeatherHistory() {
+      let url = "/weather/history";
+
+      if (selectedFrom && selectedTo) {
+        const params = new URLSearchParams({
+          from: selectedFrom.toISOString(),
+          to: selectedTo.toISOString(),
+        });
+
+        url += `?${params.toString()}`;
+      }
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`Weather history request failed: ${response.status}`);
+      }
+
+      return await response.json();
+    }
+
+    function setPresetRange(hours) {
+      selectedTo = new Date();
+      selectedFrom = new Date(
+        selectedTo.getTime() - hours * 60 * 60 * 1000
+      );
+
+      refreshDashboard();
+    }
+
+    function applyCustomRange() {
+      const fromValue = document.getElementById("customFrom").value;
+      const toValue = document.getElementById("customTo").value;
+
+      if (!fromValue || !toValue) {
+        alert("Please select both start and end time.");
+        return;
+      }
+
+      selectedFrom = new Date(fromValue);
+      selectedTo = new Date(toValue);
+
+      refreshDashboard();
+    }
+
+    function formatTime(timestamp) {
+      return new Date(timestamp).toLocaleString();
+    }
+
+    async function renderCurrentValues() {
+      try {
+        const data = await loadWeatherData();
+
+        document.getElementById("temperature").innerText =
+          `${data.temperatureCelsius} °C`;
+
+        document.getElementById("pressure").innerText =
+          `${data.pressureHpa} hPa`;
+
+        document.getElementById("light").innerText =
+          `${data.lightLevelLux} lux`;
+
+        document.getElementById("wifi").innerText =
+          `${data.wifiRssiDbm} dBm`;
+
+        document.getElementById("updated").innerText =
+          `Updated: ${formatTime(data.receivedAt)}`;
+      } catch (error) {
+        console.error("Failed to load latest weather data:", error);
+
+        document.getElementById("updated").innerText =
+          "Latest weather data currently unavailable.";
+      }
+    }
+
+    async function renderCharts() {
+      try {
+        const history = await loadWeatherHistory();
+        const reversedHistory = [...history].reverse();
+
+        const labels = reversedHistory.map((entry) =>
+          formatTime(entry.receivedAt)
+        );
+
+        const temperatures = reversedHistory.map(
+          (entry) => entry.temperatureCelsius
+        );
+
+        const lightLevels = reversedHistory.map(
+          (entry) => entry.lightLevelLux
+        );
+
+        renderTemperatureChart(labels, temperatures);
+        renderLightChart(labels, lightLevels);
+      } catch (error) {
+        console.error("Failed to load weather history:", error);
+      }
+    }
+
+    function renderTemperatureChart(labels, temperatures) {
+      const context = document
+        .getElementById("temperatureChart")
+        .getContext("2d");
+
+      if (temperatureChart) {
+        temperatureChart.data.labels = labels;
+        temperatureChart.data.datasets[0].data = temperatures;
+        temperatureChart.update("none");
+        return;
+      }
+
+      temperatureChart = new Chart(context, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Temperature °C",
+              data: temperatures,
+              borderWidth: 2,
+              tension: 0.2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          animation: false,
+          scales: {
+            x: {
+              ticks: {
+                maxTicksLimit: 10,
+              },
+            },
+          },
+        },
       });
-
-      url += `?${params.toString()}`;
     }
 
-    const response = await fetch(url);
-    return await response.json();
-  }
+    function renderLightChart(labels, lightLevels) {
+      const context = document
+        .getElementById("lightChart")
+        .getContext("2d");
 
-  function setPresetRange(hours) {
-    selectedTo = new Date();
-    selectedFrom = new Date(
-      selectedTo.getTime() - hours * 60 * 60 * 1000
-    );
+      if (lightChart) {
+        lightChart.data.labels = labels;
+        lightChart.data.datasets[0].data = lightLevels;
+        lightChart.update("none");
+        return;
+      }
 
-    refreshDashboard();
-  }
-
-  function applyCustomRange() {
-    const fromValue = document.getElementById("customFrom").value;
-    const toValue = document.getElementById("customTo").value;
-
-    if (!fromValue || !toValue) {
-      alert("Please select both start and end time.");
-      return;
-    }
-
-    selectedFrom = new Date(fromValue);
-    selectedTo = new Date(toValue);
-
-    refreshDashboard();
-  }
-
-  function formatTime(timestamp) {
-    return new Date(timestamp).toLocaleString();
-  }
-
-  async function renderCurrentValues() {
-    try {
-      const data = await loadWeatherData();
-
-      document.getElementById("temperature").innerText =
-        `${data.temperatureCelsius} °C`;
-
-      document.getElementById("pressure").innerText =
-        `${data.pressureHpa} hPa`;
-
-      document.getElementById("light").innerText =
-        `${data.lightLevelLux} lux`;
-
-      document.getElementById("wifi").innerText =
-        `${data.wifiRssiDbm} dBm`;
-
-      document.getElementById("updated").innerText =
-        `Updated: ${formatTime(data.receivedAt)}`;
-    } catch (error) {
-      console.error("Failed to load latest weather data:", error);
-    }
-  }
-
-  async function renderCharts() {
-    try {
-      const history = await loadWeatherHistory();
-
-      const reversedHistory = [...history].reverse();
-
-      const labels = reversedHistory.map((entry) =>
-        formatTime(entry.receivedAt)
-      );
-
-      const temperatures = reversedHistory.map(
-        (entry) => entry.temperatureCelsius
-      );
-
-      const lightLevels = reversedHistory.map(
-        (entry) => entry.lightLevelLux
-      );
-
-      renderTemperatureChart(labels, temperatures);
-      renderLightChart(labels, lightLevels);
-    } catch (error) {
-      console.error("Failed to load weather history:", error);
-    }
-  }
-
-  function renderTemperatureChart(labels, temperatures) {
-    const context = document
-      .getElementById("temperatureChart")
-      .getContext("2d");
-
-    if (temperatureChart) {
-      temperatureChart.data.labels = labels;
-      temperatureChart.data.datasets[0].data = temperatures;
-      temperatureChart.update("none");
-      return;
-    }
-
-    temperatureChart = new Chart(context, {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          {
-            label: "Temperature °C",
-            data: temperatures,
-            borderWidth: 2,
-            tension: 0.2,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        animation: false,
-        scales: {
-          x: {
-            ticks: {
-              maxTicksLimit: 10,
+      lightChart = new Chart(context, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Light level lux",
+              data: lightLevels,
+              borderWidth: 2,
+              tension: 0.2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          animation: false,
+          scales: {
+            x: {
+              ticks: {
+                maxTicksLimit: 10,
+              },
             },
           },
         },
-      },
-    });
-  }
-
-  function renderLightChart(labels, lightLevels) {
-    const context = document
-      .getElementById("lightChart")
-      .getContext("2d");
-
-    if (lightChart) {
-      lightChart.data.labels = labels;
-      lightChart.data.datasets[0].data = lightLevels;
-      lightChart.update("none");
-      return;
+      });
     }
 
-    lightChart = new Chart(context, {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          {
-            label: "Light level lux",
-            data: lightLevels,
-            borderWidth: 2,
-            tension: 0.2,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        animation: false,
-        scales: {
-          x: {
-            ticks: {
-              maxTicksLimit: 10,
-            },
-          },
-        },
-      },
-    });
-  }
+    async function refreshDashboard() {
+      await Promise.all([
+        renderCurrentValues(),
+        renderCharts(),
+      ]);
+    }
 
-  async function refreshDashboard() {
-    await Promise.all([
-      renderCurrentValues(),
-      renderCharts(),
-    ]);
-  }
+    setPresetRange(12);
 
-  setPresetRange(12);
+    setInterval(() => {
+      refreshDashboard();
+    }, 5000);
+  </script>
 
-  setInterval(() => {
-    refreshDashboard();
-  }, 5000);
-</script>
+</body>
+</html>
