@@ -109,7 +109,10 @@ app.get("/weather/latest", (req, res) => {
 });
 
 app.get("/weather/history", (req, res) => {
-  const query = `
+  const from = req.query.from;
+  const to = req.query.to;
+
+  let query = `
     SELECT
       id,
       temperature_celsius,
@@ -118,11 +121,24 @@ app.get("/weather/history", (req, res) => {
       wifi_rssi_dbm,
       received_at
     FROM weather_measurements
-    ORDER BY received_at DESC
-    LIMIT 100
   `;
 
-  db.all(query, [], (error, rows) => {
+  const queryParams = [];
+
+  if (from && to) {
+    query += `
+      WHERE received_at BETWEEN ? AND ?
+    `;
+
+    queryParams.push(from, to);
+  }
+
+  query += `
+    ORDER BY received_at DESC
+    LIMIT 2000
+  `;
+
+  db.all(query, queryParams, (error, rows) => {
     if (error) {
       console.error("Failed to load weather history:", error.message);
 
