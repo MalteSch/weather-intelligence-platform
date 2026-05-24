@@ -100,6 +100,8 @@
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
 </head>
 <body>
 
@@ -267,29 +269,30 @@
           formatTime(entry.receivedAt)
         );
 
-        const temperatures = reversedHistory.map(
-          (entry) => entry.temperatureCelsius
-        );
+        const temperaturePoints = reversedHistory.map((entry) => ({
+          x: entry.receivedAt,
+          y: entry.temperatureCelsius,
+        }));
 
-        const lightLevels = reversedHistory.map(
-          (entry) => entry.lightLevelLux
-        );
+        const lightPoints = reversedHistory.map((entry) => ({
+          x: entry.receivedAt,
+          y: entry.lightLevelLux,
+        }));
 
-        renderTemperatureChart(labels, temperatures);
-        renderLightChart(labels, lightLevels);
+        renderTemperatureChart(temperaturePoints);
+        renderLightChart(lightPoints);
       } catch (error) {
         console.error("Failed to load weather history:", error);
       }
     }
 
-    function renderTemperatureChart(labels, temperatures) {
+    function renderTemperatureChart(temperaturePoints) {
       const context = document
         .getElementById("temperatureChart")
         .getContext("2d");
 
       if (temperatureChart) {
-        temperatureChart.data.labels = labels;
-        temperatureChart.data.datasets[0].data = temperatures;
+        temperatureChart.data.datasets[0].data = temperaturePoints;
         temperatureChart.update("none");
         return;
       }
@@ -297,11 +300,10 @@
       temperatureChart = new Chart(context, {
         type: "line",
         data: {
-          labels,
           datasets: [
             {
               label: "Temperature °C",
-              data: temperatures,
+              data: temperaturePoints,
               borderWidth: 2,
               tension: 0.2,
             },
@@ -310,10 +312,12 @@
         options: {
           responsive: true,
           animation: false,
+          parsing: false,
           scales: {
             x: {
-              ticks: {
-                maxTicksLimit: 10,
+              type: "time",
+              time: {
+                tooltipFormat: "dd.MM.yyyy HH:mm:ss",
               },
             },
           },
@@ -321,14 +325,13 @@
       });
     }
 
-    function renderLightChart(labels, lightLevels) {
+    function renderLightChart(lightPoints) {
       const context = document
         .getElementById("lightChart")
         .getContext("2d");
 
       if (lightChart) {
-        lightChart.data.labels = labels;
-        lightChart.data.datasets[0].data = lightLevels;
+        lightChart.data.datasets[0].data = lightPoints;
         lightChart.update("none");
         return;
       }
@@ -336,11 +339,10 @@
       lightChart = new Chart(context, {
         type: "line",
         data: {
-          labels,
           datasets: [
             {
               label: "Light level lux",
-              data: lightLevels,
+              data: lightPoints,
               borderWidth: 2,
               tension: 0.2,
             },
@@ -349,10 +351,12 @@
         options: {
           responsive: true,
           animation: false,
+          parsing: false,
           scales: {
             x: {
-              ticks: {
-                maxTicksLimit: 10,
+              type: "time",
+              time: {
+                tooltipFormat: "dd.MM.yyyy HH:mm:ss",
               },
             },
           },
