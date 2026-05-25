@@ -1,226 +1,372 @@
 # Weather Intelligence Platform
 
-Personal weather station and backend learning project based on ESP32.
-
-The goal of this project is to collect local weather data from real sensors, send it to backend services, store measurements persistently and later generate AI-supported weather insights based on historical measurements and trends.
+ESP32-based weather station platform with persistent storage, live dashboard visualization and containerized deployment.
 
 ---
 
-# Goals
+# Project Goals
 
-- Learn Go
-- Improve TypeScript skills
-- Work with ESP32-based sensor hardware
-- Collect real-world weather data
-- Build event-driven backend systems
-- Create a dashboard for local weather data
-- Generate AI-supported weather interpretations
+This project is intentionally built as a learning-oriented full-stack platform.
 
----
+Primary learning areas:
 
-# Current status
+- Go / TypeScript ecosystem understanding
+- ESP32 firmware development
+- Backend API development
+- Docker & containerized deployment
+- GitHub Actions CI/CD
+- SQLite persistence
+- Time-series visualization
+- MQTT architecture (planned)
+- Infrastructure & self-hosting
 
-- [x] ESP32 setup
-- [x] BMP280 sensor communication
-- [x] BH1750 light sensor integration
-- [x] JSON output
-- [x] WiFi connectivity
-- [x] HTTP sensor uploads
-- [x] Local backend API
-- [x] SQLite persistence
-- [x] Latest measurement endpoint
-- [x] Measurement history endpoint
-- [x] Live dashboard
-- [x] Local secrets handling
-- [x] LED upload status indicator
-- [x] GitHub repository setup
-- [ ] Chart.js dashboard charts
-- [ ] BME280 integration
-- [ ] OLED display
-- [ ] OTA updates
-- [ ] AI forecast generation
+The system is designed to evolve incrementally instead of being overengineered from the beginning.
 
 ---
 
-# Current sensor output
-
-```json
-{
-  "temperatureCelsius": 27.71,
-  "pressureHpa": 1018.26,
-  "wifiIp": "192.168.0.148",
-  "wifiRssiDbm": -71,
-  "lightLevelLux": 28.33
-}
-```
-
----
-
-# Backend API
-
-## POST `/weather`
-
-Receives weather measurements from the ESP32 sensor node and stores them in SQLite.
-
-## GET `/weather/latest`
-
-Returns the latest received weather measurement.
-
-## GET `/weather/history`
-
-Returns the latest stored measurements for dashboard visualization and trend analysis.
-
-## GET `/health`
-
-Simple backend health check endpoint.
-
----
-
-# Project structure
+# Current Architecture
 
 ```text
-sensors/
-  esp32-weather-node/
-
-backend/
-  public/
-  database.js
-  server.js
-  weather.db
-
-docs/
-
-tools/
+ESP32 Sensor Node
+        │
+        │ HTTP POST
+        ▼
+Node.js / Express Backend
+        │
+        ├── SQLite persistence
+        ├── REST API
+        └── Static dashboard
+                │
+                ▼
+        Chart.js frontend
 ```
 
----
-
-# Local configuration
-
-WiFi credentials and local API configuration are stored in a local `secrets.h` file.
-
-This file is intentionally excluded from Git via `.gitignore`.
-
-Create a local `secrets.h` file in the project root:
-
-```cpp
-#pragma once
-
-const char* WIFI_SSID = "your_wifi_name";
-const char* WIFI_PASSWORD = "your_wifi_password";
-const char* API_URL = "http://your_local_backend:3000/weather";
-```
-
-A public template is provided as:
+Deployment:
 
 ```text
-secrets.example.h
+Git Push
+   │
+   ▼
+GitHub Actions
+   │
+   ▼
+Build Docker Image
+   │
+   ▼
+Push to GHCR
+   │
+   ▼
+Synology NAS pulls image
 ```
-
-`API_URL` defines the endpoint used by the ESP32 to upload weather measurements.
 
 ---
 
 # Hardware
 
-## Currently used
+## Current Hardware Setup
 
-- ESP32 development board
-- BMP280 temperature and pressure sensor
-- BH1750 light sensor
-- USB power bank
+### Controller
 
-## Planned / available
+- ESP32 Development Board
+- USB UART: CH340C
 
-- BME280 temperature, pressure and humidity sensor
-- OLED display
-- Hall sensors and magnets
-- Outdoor housing via 3D printing
-- Solar power supply
+### Sensors
+
+#### BME280
+
+Measures:
+
+- temperature
+- air pressure
+
+#### Light Sensor
+
+Currently used for ambient brightness measurements.
+
+### Connectivity
+
+- WiFi-based communication
+- HTTP measurement upload to backend
+
+### Planned Hardware Extensions
+
+- humidity sensing
+- outdoor enclosure
+- battery/solar operation
+- additional distributed sensor nodes
+
+---
+
+# Features
+
+## Implemented
+
+### ESP32 Sensor Node
+
+- Temperature measurement
+- Pressure measurement
+- Light sensor support
+- WiFi signal strength reporting
+- HTTP-based measurement upload
+- Periodic data transmission
+
+### Backend
+
+- Express REST API
+- SQLite persistence
+- Measurement history endpoint
+- Latest measurement endpoint
+- Time-range filtering
+- Dockerized runtime
+
+### Dashboard
+
+- Live weather dashboard
+- Real-time chart updates
+- Temperature graph
+- Light level graph
+- Real timestamp-based chart scaling
+- Time range presets
+- Custom date/time filtering
+
+### Infrastructure
+
+- Docker image builds via GitHub Actions
+- GitHub Container Registry publishing
+- Synology deployment workflow
+- Persistent SQLite storage
+- Reverse proxy compatible
+
+---
+
+# Repository Structure
+
+```text
+backend/
+├── public/
+│   └── index.html
+├── data/
+├── database.js
+├── package.json
+├── server.js
+└── Dockerfile
+
+firmware/
+└── esp32/
+
+.github/
+└── workflows/
+```
+
+---
+
+# API
+
+## POST /weather
+
+Receives weather measurements from the ESP32.
+
+Example payload:
+
+```json
+{
+  "temperatureCelsius": 22.4,
+  "pressureHpa": 1013.2,
+  "lightLevelLux": 120,
+  "wifiRssiDbm": -52
+}
+```
+
+---
+
+## GET /weather/latest
+
+Returns the latest measurement from SQLite.
+
+Example response:
+
+```json
+{
+  "id": 294,
+  "temperatureCelsius": 22.4,
+  "pressureHpa": 1013.2,
+  "lightLevelLux": 120,
+  "wifiRssiDbm": -52,
+  "receivedAt": "2026-05-23T21:28:08.614Z"
+}
+```
+
+---
+
+## GET /weather/history
+
+Returns historical measurements.
+
+Supports optional time filtering:
+
+```text
+/weather/history?from=2026-05-23T00:00:00.000Z&to=2026-05-24T00:00:00.000Z
+```
+
+---
+
+# SQLite Schema
+
+Current table:
+
+```sql
+CREATE TABLE weather_measurements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  temperature_celsius REAL,
+  pressure_hpa REAL,
+  light_level_lux REAL,
+  wifi_rssi_dbm INTEGER,
+  received_at TEXT
+);
+```
+
+Database values use snake_case.
+
+API responses use camelCase.
 
 ---
 
 # Dashboard
 
-The dashboard currently displays:
+The dashboard is intentionally implemented using:
 
-- Temperature
-- Pressure
-- Light level
-- WiFi signal strength
-- Last update timestamp
+- plain HTML
+- plain CSS
+- plain JavaScript
+- Chart.js
 
-Planned next:
+No frontend framework is currently used.
 
-- Temperature history chart
-- Light level history chart
-- Pressure history chart
-- Device status indicators
-- Outdoor operation status
+This keeps the architecture simple and educational.
 
----
+Current dashboard capabilities:
 
-# Roadmap
-
-## Phase 1: Sensor node
-
-- Read temperature and pressure
-- Read light level
-- Output structured JSON
-- Connect to WiFi
-- Upload measurements via HTTP
-- Add humidity support via BME280
-- Display current values on OLED
-
-## Phase 2: Backend
-
-- Receive weather data via HTTP
-- Store incoming measurements in SQLite
-- Provide latest and historical weather data through an API
-- Add input validation
-- Add basic error handling and retries
-
-## Phase 3: Dashboard
-
-- Display current weather values
-- Visualize historical trends with Chart.js
-- Show sensor and connectivity status
-- Auto-refresh live values
-
-## Phase 4: Outdoor operation
-
-- Powerbank operation
-- Outdoor sensor placement
-- OTA firmware updates
-- Connection monitoring
-- Upload retry handling
-
-## Phase 5: Advanced sensors
-
-- Humidity via BME280
-- Wind speed via hall sensor
-- Rain detection
-- Day/night detection
-
-## Phase 6: Data & intelligence
-
-- Historical measurement analysis
-- Weather trend visualization
-- AI-supported weather summaries
-- Forecast comparison
+- live measurement updates
+- smooth chart updates
+- real time-axis scaling
+- selectable time windows
+- custom date filtering
 
 ---
 
-# Development notes
+# Docker
 
-The project intentionally combines:
+## Local Build
 
-- Embedded development
-- Networking
-- Backend APIs
-- SQLite persistence
-- Frontend dashboards
-- Dev tooling
-- Git/GitHub workflows
+```bash
+cd backend
 
-The focus is not only the final weather station itself, but also learning modern software engineering practices through a real-world project.
+docker build -t weather-backend .
+```
+
+---
+
+## Local Run
+
+```bash
+docker run -p 3000:3000 weather-backend
+```
+
+---
+
+# Synology Deployment
+
+Deployment target:
+
+- Synology NAS
+- Docker Compose
+- GHCR-based image pulls
+
+The SQLite database is persisted through mounted volumes.
+
+Example deployment update flow:
+
+```bash
+docker compose pull
+
+docker rm -f weather_backend
+
+docker compose up -d
+```
+
+---
+
+# GitHub Actions / CI
+
+Current CI pipeline:
+
+1. Push to repository
+2. GitHub Actions builds Docker image
+3. Image is pushed to GitHub Container Registry
+4. Synology pulls latest image
+
+---
+
+# Important Notes
+
+## sqlite3 + Docker
+
+The `sqlite3` package must be built inside the container image.
+
+Do NOT copy local `node_modules` into Docker images.
+
+This avoids glibc compatibility problems between systems.
+
+---
+
+## Time-Series Visualization
+
+Charts use real timestamp scaling.
+
+This ensures outages or missing measurements appear as actual gaps on the timeline.
+
+---
+
+# Planned Features
+
+## Near-term
+
+- Pressure chart
+- Humidity sensor
+- Better dashboard styling
+- Chart legends & statistics
+- Health monitoring endpoint
+- Improved deployment tooling
+
+## Mid-term
+
+- MQTT migration
+- ESP-side caching/buffering
+- Multiple sensor nodes
+- Authentication
+- Historical aggregation
+- Data export
+
+## Long-term
+
+- Go backend migration experiments
+- TypeScript frontend/backend exploration
+- Alerting system
+- Grafana integration
+- InfluxDB experiments
+- Home Assistant integration
+
+---
+
+# Development Philosophy
+
+This project intentionally prioritizes:
+
+- incremental learning
+- understandable architecture
+- visible system evolution
+- practical infrastructure experience
+
+The goal is not merely building a weather station.
+
+The goal is learning how modern software systems evolve from simple prototypes into robust services.
