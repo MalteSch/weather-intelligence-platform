@@ -159,15 +159,34 @@ app.get("/weather/history", (req, res) => {
   if (from && to) {
     query += `
       WHERE received_at BETWEEN ? AND ?
+      ORDER BY received_at ASC
     `;
 
     queryParams.push(from, to);
+  } else {
+    query = `
+      SELECT
+        id,
+        temperature_celsius,
+        pressure_hpa,
+        light_level_lux,
+        wifi_rssi_dbm,
+        received_at
+      FROM (
+        SELECT
+          id,
+          temperature_celsius,
+          pressure_hpa,
+          light_level_lux,
+          wifi_rssi_dbm,
+          received_at
+        FROM weather_measurements
+        ORDER BY received_at DESC
+        LIMIT 2000
+      )
+      ORDER BY received_at ASC
+    `;
   }
-
-  query += `
-    ORDER BY received_at DESC
-    LIMIT 2000
-  `;
 
   db.all(query, queryParams, (error, rows) => {
     if (error) {

@@ -737,19 +737,15 @@
           return;
         }
 
-        const chronologicalHistory = [...history].sort(
-          (first, second) => new Date(first.receivedAt) - new Date(second.receivedAt)
-        );
-
-        const temperaturePoints = chronologicalHistory.map((entry) => ({
+        const temperaturePoints = history.map((entry) => ({
           x: new Date(entry.receivedAt).getTime(),
           y: entry.temperatureCelsius,
         }));
-        const pressurePoints = chronologicalHistory.map((entry) => ({
+        const pressurePoints = history.map((entry) => ({
           x: new Date(entry.receivedAt).getTime(),
           y: entry.pressureHpa,
         }));
-        const lightPoints = chronologicalHistory.map((entry) => ({
+        const lightPoints = history.map((entry) => ({
           x: new Date(entry.receivedAt).getTime(),
           y: entry.lightLevelLux,
         }));
