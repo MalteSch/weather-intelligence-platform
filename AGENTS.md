@@ -24,6 +24,31 @@ Current architecture:
 - Prefer small, reviewable changes.
 - Avoid broad refactors unless requested.
 
+## Firmware Versioning
+
+Any change affecting ESP32 firmware behavior must increment `FIRMWARE_VERSION`.
+
+This includes:
+- sensor logic changes
+- payload changes
+- OTA behavior
+- connectivity/recovery logic
+- telemetry fields
+- LED/status behavior
+- timing changes
+
+The firmware version is used to verify OTA deployments and runtime state in the dashboard.
+
+Use semantic-ish incremental versions such as:
+
+- 0.1.0
+- 0.1.1
+- 0.2.0
+- 0.2.1-health
+- 0.3.0-ota
+
+Avoid leaving outdated version strings after firmware modifications.
+
 ## Backend
 
 Main files:
