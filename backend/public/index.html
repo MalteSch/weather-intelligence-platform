@@ -392,6 +392,16 @@
       margin: 5px 2px 16px;
     }
 
+    .chart-interaction-hint {
+      color: #bceaff;
+    }
+
+    .reset-zoom-button {
+      flex-shrink: 0;
+      border-color: rgba(56, 189, 248, 0.28);
+      background: rgba(56, 189, 248, 0.09);
+    }
+
     .charts-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
@@ -522,6 +532,11 @@
         gap: 13px;
       }
 
+      .section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
       .chart-stats {
         width: 100%;
         justify-content: space-between;
@@ -558,6 +573,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/luxon"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 <body>
   <main class="dashboard">
@@ -658,8 +675,12 @@
     <div class="section-heading">
       <div>
         <h2>Historical trends</h2>
-        <p>Readings refresh automatically every 5 seconds</p>
+        <p>
+          Readings refresh automatically every 5 seconds.
+          <span class="chart-interaction-hint">Drag across a chart to zoom into a time range.</span>
+        </p>
       </div>
+      <button class="reset-zoom-button" onclick="setPresetRange(12)">Back to 12h</button>
     </div>
 
     <section class="charts-grid" aria-label="Weather history charts">
@@ -722,6 +743,7 @@
     let selectedTo = null;
     let hasRenderedHistory = false;
     const MIN_RANGE_STEP_MS = 1000;
+    const MIN_ZOOM_DRAG_PIXELS = 12;
     const HEALTH_WINDOW_HOURS = 8;
 
     async function loadWeatherData() {
@@ -885,6 +907,20 @@
       syncRangeInputs();
       setActivePresetButton(hours);
       updateRangeDescription();
+      resetChartZooms();
+
+      refreshDashboard({ showHistoryLoading: true });
+    }
+
+    function setFixedRange(from, to) {
+      selectedPresetHours = null;
+      selectedFrom = from;
+      selectedTo = to;
+
+      setActivePresetButton(null);
+      syncRangeInputs();
+      updateRangeDescription();
+      resetChartZooms();
 
       refreshDashboard({ showHistoryLoading: true });
     }
@@ -914,15 +950,7 @@
         return;
       }
 
-      selectedPresetHours = null;
-      selectedFrom = from;
-      selectedTo = to;
-
-      setActivePresetButton(null);
-      syncRangeInputs();
-      updateRangeDescription();
-
-      refreshDashboard({ showHistoryLoading: true });
+      setFixedRange(from, to);
     }
 
     function formatTime(timestamp) {
@@ -1283,10 +1311,34 @@
           legend: {
             display: false,
           },
+          zoom: {
+            pan: {
+              enabled: false,
+            },
+            zoom: {
+              wheel: {
+                enabled: false,
+              },
+              pinch: {
+                enabled: false,
+              },
+              drag: {
+                enabled: true,
+                threshold: MIN_ZOOM_DRAG_PIXELS,
+                backgroundColor: "rgba(56, 189, 248, 0.14)",
+                borderColor: "rgba(56, 189, 248, 0.8)",
+                borderWidth: 1,
+              },
+              mode: "x",
+              onZoomComplete: applyChartZoomRange,
+            },
+          },
         },
         scales: {
           x: {
             type: "time",
+            min: selectedFrom ? selectedFrom.getTime() : undefined,
+            max: selectedTo ? selectedTo.getTime() : undefined,
             time: {
               tooltipFormat: "dd.MM.yyyy HH:mm:ss",
             },
@@ -1310,12 +1362,42 @@
       };
     }
 
+    function resetChartZooms() {
+      [temperatureChart, pressureChart, lightChart].forEach((chart) => {
+        if (chart && typeof chart.resetZoom === "function") {
+          chart.resetZoom();
+        }
+      });
+    }
+
+    function applyChartZoomRange({ chart }) {
+      const fromTimestamp = chart.scales.x.min;
+      const toTimestamp = chart.scales.x.max;
+
+      if (
+        !Number.isFinite(fromTimestamp) ||
+        !Number.isFinite(toTimestamp) ||
+        toTimestamp - fromTimestamp < MIN_RANGE_STEP_MS
+      ) {
+        resetChartZooms();
+        return;
+      }
+
+      setFixedRange(new Date(fromTimestamp), new Date(toTimestamp));
+    }
+
+    function updateChartData(chart, points) {
+      chart.data.datasets[0].data = points;
+      chart.options.scales.x.min = selectedFrom ? selectedFrom.getTime() : undefined;
+      chart.options.scales.x.max = selectedTo ? selectedTo.getTime() : undefined;
+      chart.update("none");
+    }
+
     function renderTemperatureChart(temperaturePoints) {
       const context = document.getElementById("temperatureChart").getContext("2d");
 
       if (temperatureChart) {
-        temperatureChart.data.datasets[0].data = temperaturePoints;
-        temperatureChart.update("none");
+        updateChartData(temperatureChart, temperaturePoints);
         return;
       }
 
@@ -1342,8 +1424,7 @@
       const context = document.getElementById("pressureChart").getContext("2d");
 
       if (pressureChart) {
-        pressureChart.data.datasets[0].data = pressurePoints;
-        pressureChart.update("none");
+        updateChartData(pressureChart, pressurePoints);
         return;
       }
 
@@ -1370,8 +1451,7 @@
       const context = document.getElementById("lightChart").getContext("2d");
 
       if (lightChart) {
-        lightChart.data.datasets[0].data = lightPoints;
-        lightChart.update("none");
+        updateChartData(lightChart, lightPoints);
         return;
       }
 
