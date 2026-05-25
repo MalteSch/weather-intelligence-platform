@@ -14,6 +14,7 @@ const int SDA_PIN = 21;
 const int SCL_PIN = 22;
 const int MEASUREMENT_INTERVAL_MS = 5000;
 const uint8_t SENSOR_ADDRESS = 0x76;
+const char* FIRMWARE_VERSION = "0.1.0-ota-test";
 
 void connectToWiFi() {
   Serial.print("{\"status\":\"wifi_connecting\",\"ssid\":\"");
@@ -119,6 +120,11 @@ String buildWeatherPayload(float temperature, float pressure, float lightLevelLu
   payload += ",";
   payload += "\"lightLevelLux\":";
   payload += String(lightLevelLux, 2);
+  payload += ",";
+
+  payload += "\"firmwareVersion\":\"";
+  payload += FIRMWARE_VERSION;
+  payload += "\"";
 
   payload += "}";
 
