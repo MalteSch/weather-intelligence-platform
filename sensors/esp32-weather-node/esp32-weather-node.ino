@@ -3,6 +3,7 @@
 #include <Adafruit_BMP280.h>
 #include <BH1750.h>
 #include <WiFi.h>
+#include <ArduinoOTA.h>
 #include <HTTPClient.h>
 
 Adafruit_BMP280 bmp;
@@ -30,6 +31,71 @@ void connectToWiFi() {
   Serial.print("{\"status\":\"wifi_connected\",\"ip\":\"");
   Serial.print(WiFi.localIP());
   Serial.println("\"}");
+}
+
+void setupOta() {
+  ArduinoOTA.setHostname(OTA_HOSTNAME);
+  ArduinoOTA.setPassword(OTA_PASSWORD);
+
+  ArduinoOTA.onStart([]() {
+    Serial.print("{\"status\":\"ota_start\",\"type\":\"");
+    Serial.print(ArduinoOTA.getCommand() == U_FLASH ? "firmware" : "filesystem");
+    Serial.println("\"}");
+  });
+
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.print("{\"status\":\"ota_progress\",\"percent\":");
+    Serial.print((progress * 100) / total);
+    Serial.println("}");
+  });
+
+  ArduinoOTA.onEnd([]() {
+    Serial.println("{\"status\":\"ota_success\"}");
+  });
+
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.print("{\"status\":\"ota_error\",\"code\":");
+    Serial.print(error);
+    Serial.print(",\"message\":\"");
+
+    switch (error) {
+      case OTA_AUTH_ERROR:
+        Serial.print("authentication failed");
+        break;
+      case OTA_BEGIN_ERROR:
+        Serial.print("begin failed");
+        break;
+      case OTA_CONNECT_ERROR:
+        Serial.print("connect failed");
+        break;
+      case OTA_RECEIVE_ERROR:
+        Serial.print("receive failed");
+        break;
+      case OTA_END_ERROR:
+        Serial.print("end failed");
+        break;
+      default:
+        Serial.print("unknown error");
+        break;
+    }
+
+    Serial.println("\"}");
+  });
+
+  ArduinoOTA.begin();
+
+  Serial.print("{\"status\":\"ota_ready\",\"hostname\":\"");
+  Serial.print(OTA_HOSTNAME);
+  Serial.println("\"}");
+}
+
+void waitForNextMeasurement() {
+  unsigned long startTime = millis();
+
+  while (millis() - startTime < MEASUREMENT_INTERVAL_MS) {
+    ArduinoOTA.handle();
+    delay(10);
+  }
 }
 
 String buildWeatherPayload(float temperature, float pressure, float lightLevelLux) {
@@ -93,12 +159,14 @@ void setup() {
   lightMeter.begin();
 
   connectToWiFi();
+  setupOta();
 
   if (!bmp.begin(SENSOR_ADDRESS)) {
     Serial.println("{\"status\":\"error\",\"message\":\"BMP280 not found\"}");
 
     while (true) {
-      delay(1000);
+      ArduinoOTA.handle();
+      delay(10);
     }
   }
 
@@ -106,6 +174,8 @@ void setup() {
 }
 
 void loop() {
+  ArduinoOTA.handle();
+
   float temperature = bmp.readTemperature();
   float pressure = bmp.readPressure() / 100.0;
   float lightLevelLux = lightMeter.readLightLevel();
@@ -119,5 +189,5 @@ void loop() {
   printJson(payload);
   sendWeatherPayload(payload);
 
-  delay(MEASUREMENT_INTERVAL_MS);
+  waitForNextMeasurement();
 }
