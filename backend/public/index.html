@@ -165,11 +165,16 @@
   </div>
 
   <div class="card">
+    <canvas id="pressureChart"></canvas>
+  </div>
+
+  <div class="card">
     <canvas id="lightChart"></canvas>
   </div>
 
   <script>
     let temperatureChart;
+    let pressureChart;
     let lightChart;
 
     let selectedFrom = null;
@@ -274,12 +279,18 @@
           y: entry.temperatureCelsius,
         }));
 
+        const pressurePoints = reversedHistory.map((entry) => ({
+          x: new Date(entry.receivedAt).getTime(),
+          y: entry.pressureHpa,
+        }));
+
         const lightPoints = reversedHistory.map((entry) => ({
           x: new Date(entry.receivedAt).getTime(),
           y: entry.lightLevelLux,
         }));
 
         renderTemperatureChart(temperaturePoints);
+        renderPressureChart(pressurePoints);
         renderLightChart(lightPoints);
       } catch (error) {
         console.error("Failed to load weather history:", error);
@@ -304,6 +315,45 @@
             {
               label: "Temperature °C",
               data: temperaturePoints,
+              borderWidth: 2,
+              tension: 0.2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          animation: false,
+          parsing: false,
+          scales: {
+            x: {
+              type: "time",
+              time: {
+                tooltipFormat: "dd.MM.yyyy HH:mm:ss",
+              },
+            },
+          },
+        },
+      });
+    }
+
+    function renderPressureChart(pressurePoints) {
+      const context = document
+        .getElementById("pressureChart")
+        .getContext("2d");
+
+      if (pressureChart) {
+        pressureChart.data.datasets[0].data = pressurePoints;
+        pressureChart.update("none");
+        return;
+      }
+
+      pressureChart = new Chart(context, {
+        type: "line",
+        data: {
+          datasets: [
+            {
+              label: "Pressure hPa",
+              data: pressurePoints,
               borderWidth: 2,
               tension: 0.2,
             },
