@@ -20,6 +20,11 @@ db.ready = new Promise((resolve, reject) => {
           light_level_lux REAL NOT NULL,
           wifi_rssi_dbm INTEGER NOT NULL,
           firmware_version TEXT,
+          uptime_seconds INTEGER,
+          free_heap_bytes INTEGER,
+          wifi_reconnect_count INTEGER,
+          upload_failure_count INTEGER,
+          last_successful_upload_seconds_ago INTEGER,
           received_at TEXT NOT NULL
         )
       `,
@@ -35,27 +40,44 @@ db.ready = new Promise((resolve, reject) => {
             return;
           }
 
-          const hasFirmwareVersion = columns.some(
-            (column) => column.name === "firmware_version"
+          const existingColumnNames = new Set(columns.map((column) => column.name));
+          const optionalColumns = [
+            ["firmware_version", "TEXT"],
+            ["uptime_seconds", "INTEGER"],
+            ["free_heap_bytes", "INTEGER"],
+            ["wifi_reconnect_count", "INTEGER"],
+            ["upload_failure_count", "INTEGER"],
+            ["last_successful_upload_seconds_ago", "INTEGER"],
+          ];
+          const missingColumns = optionalColumns.filter(
+            ([columnName]) => !existingColumnNames.has(columnName)
           );
 
-          if (hasFirmwareVersion) {
+          if (missingColumns.length === 0) {
             resolve();
             return;
           }
 
-          db.run(
-            "ALTER TABLE weather_measurements ADD COLUMN firmware_version TEXT",
-            (error) => {
-              if (error) {
-                reject(error);
-                return;
-              }
+          let migratedColumnCount = 0;
 
-              console.log("Added firmware_version column to weather measurements.");
-              resolve();
-            }
-          );
+          for (const [columnName, columnType] of missingColumns) {
+            db.run(
+              `ALTER TABLE weather_measurements ADD COLUMN ${columnName} ${columnType}`,
+              (error) => {
+                if (error) {
+                  reject(error);
+                  return;
+                }
+
+                console.log(`Added ${columnName} column to weather measurements.`);
+                migratedColumnCount++;
+
+                if (migratedColumnCount === missingColumns.length) {
+                  resolve();
+                }
+              }
+            );
+          }
         });
       }
     );

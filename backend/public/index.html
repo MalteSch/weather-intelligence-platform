@@ -133,6 +133,19 @@
       font-size: 0.78rem;
     }
 
+    .health-detail {
+      margin-top: 12px;
+      padding-top: 11px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.7;
+    }
+
+    .health-detail span {
+      display: block;
+    }
+
     .summary-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -449,6 +462,9 @@
         </span>
         <p class="connection-detail" id="statusDetail">Waiting for sensor data...</p>
         <p class="connection-detail firmware-detail" id="firmwareVersion">Firmware: unknown</p>
+        <div class="health-detail" id="deviceHealth">
+          <span>Device health: waiting for data</span>
+        </div>
       </div>
     </header>
 
@@ -735,6 +751,56 @@
       return `${ageHours} hour${ageHours === 1 ? "" : "s"} ago`;
     }
 
+    function formatDuration(seconds) {
+      if (typeof seconds !== "number" || !Number.isFinite(seconds)) {
+        return "unknown";
+      }
+
+      const totalSeconds = Math.max(0, Math.floor(seconds));
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+      if (days > 0) {
+        return `${days}d ${hours}h`;
+      }
+
+      if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      }
+
+      if (minutes > 0) {
+        return `${minutes}m`;
+      }
+
+      return `${totalSeconds}s`;
+    }
+
+    function renderDeviceHealth(data) {
+      const healthElement = document.getElementById("deviceHealth");
+
+      if (data.uptimeSeconds === null || data.uptimeSeconds === undefined) {
+        healthElement.innerHTML = "<span>Device health telemetry unavailable</span>";
+        return;
+      }
+
+      const freeHeapKilobytes = typeof data.freeHeapBytes === "number"
+        ? `${(data.freeHeapBytes / 1024).toFixed(1)} KB`
+        : "unknown";
+      const reconnects = data.wifiReconnectCount ?? "unknown";
+      const failures = data.uploadFailureCount ?? "unknown";
+      const uploadAge = data.lastSuccessfulUploadSecondsAgo === null ||
+        data.lastSuccessfulUploadSecondsAgo === undefined
+        ? "not yet reported"
+        : `${formatDuration(data.lastSuccessfulUploadSecondsAgo)} before reading`;
+
+      healthElement.innerHTML = `
+        <span>Uptime: ${formatDuration(data.uptimeSeconds)} | Free heap: ${freeHeapKilobytes}</span>
+        <span>WiFi reconnects: ${reconnects} | Upload failures: ${failures}</span>
+        <span>Last successful upload: ${uploadAge}</span>
+      `;
+    }
+
     function setStatus(state, label, detail) {
       const statusIndicator = document.getElementById("statusIndicator");
       statusIndicator.className = `status-pill ${state}`;
@@ -762,7 +828,7 @@
         return;
       }
 
-      setStatus("stale", "No recent data", `Last sensor reading received ${ageLabel.toLowerCase()}.`);
+      setStatus("stale", "Offline / stale", `Last sensor reading received ${ageLabel.toLowerCase()}.`);
     }
 
     async function renderCurrentValues() {
@@ -780,11 +846,14 @@
         document.getElementById("firmwareVersion").innerText =
           `Firmware: ${data.firmwareVersion || "unknown"}`;
 
+        renderDeviceHealth(data);
         renderLatestStatus(data.receivedAt);
       } catch (error) {
         console.error("Failed to load latest weather data:", error);
         setStatus("unavailable", "No recent data", "Latest weather data currently unavailable.");
         document.getElementById("updatedDetail").innerText = "Unable to retrieve latest reading";
+        document.getElementById("deviceHealth").innerHTML =
+          "<span>Device health telemetry unavailable</span>";
       }
     }
 

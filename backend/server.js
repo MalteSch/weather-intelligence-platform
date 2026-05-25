@@ -13,6 +13,13 @@ app.use(express.json());
 
 function validateWeatherMeasurement(payload) {
   const errors = [];
+  const optionalNonNegativeNumbers = [
+    "uptimeSeconds",
+    "freeHeapBytes",
+    "wifiReconnectCount",
+    "uploadFailureCount",
+    "lastSuccessfulUploadSecondsAgo",
+  ];
 
   if (typeof payload.temperatureCelsius !== "number") {
     errors.push("temperatureCelsius must be a number");
@@ -38,7 +45,36 @@ function validateWeatherMeasurement(payload) {
     errors.push("firmwareVersion must be a string");
   }
 
+  for (const fieldName of optionalNonNegativeNumbers) {
+    const value = payload[fieldName];
+
+    if (
+      value !== undefined &&
+      value !== null &&
+      (typeof value !== "number" || !Number.isFinite(value) || value < 0)
+    ) {
+      errors.push(`${fieldName} must be a non-negative number`);
+    }
+  }
+
   return errors;
+}
+
+function mapWeatherRow(row) {
+  return {
+    id: row.id,
+    temperatureCelsius: row.temperature_celsius,
+    pressureHpa: row.pressure_hpa,
+    lightLevelLux: row.light_level_lux,
+    wifiRssiDbm: row.wifi_rssi_dbm,
+    firmwareVersion: row.firmware_version,
+    uptimeSeconds: row.uptime_seconds,
+    freeHeapBytes: row.free_heap_bytes,
+    wifiReconnectCount: row.wifi_reconnect_count,
+    uploadFailureCount: row.upload_failure_count,
+    lastSuccessfulUploadSecondsAgo: row.last_successful_upload_seconds_ago,
+    receivedAt: row.received_at,
+  };
 }
 
 app.post("/weather", (req, res) => {
@@ -65,9 +101,14 @@ app.post("/weather", (req, res) => {
       light_level_lux,
       wifi_rssi_dbm,
       firmware_version,
+      uptime_seconds,
+      free_heap_bytes,
+      wifi_reconnect_count,
+      upload_failure_count,
+      last_successful_upload_seconds_ago,
       received_at
     )
-    VALUES (?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.run(
@@ -78,6 +119,11 @@ app.post("/weather", (req, res) => {
       measurement.lightLevelLux,
       measurement.wifiRssiDbm,
       measurement.firmwareVersion ?? null,
+      measurement.uptimeSeconds ?? null,
+      measurement.freeHeapBytes ?? null,
+      measurement.wifiReconnectCount ?? null,
+      measurement.uploadFailureCount ?? null,
+      measurement.lastSuccessfulUploadSecondsAgo ?? null,
       measurement.receivedAt,
     ],
     function (error) {
@@ -116,6 +162,11 @@ app.get("/weather/latest", (req, res) => {
       light_level_lux,
       wifi_rssi_dbm,
       firmware_version,
+      uptime_seconds,
+      free_heap_bytes,
+      wifi_reconnect_count,
+      upload_failure_count,
+      last_successful_upload_seconds_ago,
       received_at
     FROM weather_measurements
     ORDER BY received_at DESC
@@ -139,15 +190,7 @@ app.get("/weather/latest", (req, res) => {
       });
     }
 
-    res.status(200).json({
-      id: row.id,
-      temperatureCelsius: row.temperature_celsius,
-      pressureHpa: row.pressure_hpa,
-      lightLevelLux: row.light_level_lux,
-      wifiRssiDbm: row.wifi_rssi_dbm,
-      firmwareVersion: row.firmware_version,
-      receivedAt: row.received_at,
-    });
+    res.status(200).json(mapWeatherRow(row));
   });
 });
 
@@ -163,6 +206,11 @@ app.get("/weather/history", (req, res) => {
       light_level_lux,
       wifi_rssi_dbm,
       firmware_version,
+      uptime_seconds,
+      free_heap_bytes,
+      wifi_reconnect_count,
+      upload_failure_count,
+      last_successful_upload_seconds_ago,
       received_at
     FROM weather_measurements
   `;
@@ -185,6 +233,11 @@ app.get("/weather/history", (req, res) => {
         light_level_lux,
         wifi_rssi_dbm,
         firmware_version,
+        uptime_seconds,
+        free_heap_bytes,
+        wifi_reconnect_count,
+        upload_failure_count,
+        last_successful_upload_seconds_ago,
         received_at
       FROM (
         SELECT
@@ -194,6 +247,11 @@ app.get("/weather/history", (req, res) => {
           light_level_lux,
           wifi_rssi_dbm,
           firmware_version,
+          uptime_seconds,
+          free_heap_bytes,
+          wifi_reconnect_count,
+          upload_failure_count,
+          last_successful_upload_seconds_ago,
           received_at
         FROM weather_measurements
         ORDER BY received_at DESC
@@ -213,15 +271,7 @@ app.get("/weather/history", (req, res) => {
       });
     }
 
-    const history = rows.map((row) => ({
-      id: row.id,
-      temperatureCelsius: row.temperature_celsius,
-      pressureHpa: row.pressure_hpa,
-      lightLevelLux: row.light_level_lux,
-      wifiRssiDbm: row.wifi_rssi_dbm,
-      firmwareVersion: row.firmware_version,
-      receivedAt: row.received_at,
-    }));
+    const history = rows.map(mapWeatherRow);
 
     res.status(200).json(history);
   });
