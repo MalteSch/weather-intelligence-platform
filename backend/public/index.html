@@ -370,7 +370,7 @@
 
     .charts-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: minmax(0, 1fr);
       gap: 16px;
     }
 
@@ -379,20 +379,74 @@
       padding: 19px 19px 15px;
     }
 
-    .chart-card:first-child {
-      grid-column: 1 / -1;
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 15px;
     }
 
     .chart-title {
-      margin: 0 0 15px;
+      margin: 0;
       color: var(--heading);
       font-size: 0.92rem;
       font-weight: 600;
     }
 
+    .chart-stats {
+      display: flex;
+      justify-content: flex-end;
+      gap: clamp(18px, 4vw, 42px);
+      margin: 0;
+    }
+
+    .chart-stat {
+      display: grid;
+      gap: 4px;
+      min-width: 66px;
+    }
+
+    .chart-stat dt {
+      color: var(--muted);
+      font-size: 0.69rem;
+      font-weight: 650;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .chart-stat dd {
+      margin: 0;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
     .chart-frame {
       position: relative;
       height: 290px;
+    }
+
+    .chart-empty {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 0.88rem;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .chart-frame.empty .chart-empty {
+      display: flex;
+    }
+
+    .chart-frame.empty canvas {
+      opacity: 0.32;
     }
 
     @media (max-width: 1020px) {
@@ -434,6 +488,18 @@
         padding: 17px;
       }
 
+      .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 13px;
+      }
+
+      .chart-stats {
+        width: 100%;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
       .range-picker,
       .range-group,
       .time-controls,
@@ -449,10 +515,6 @@
       .custom-range input,
       .apply-button {
         width: 100%;
-      }
-
-      .chart-card:first-child {
-        grid-column: auto;
       }
 
       .chart-frame {
@@ -564,22 +626,46 @@
 
     <section class="charts-grid" aria-label="Weather history charts">
       <article class="chart-card">
-        <h3 class="chart-title">Temperature</h3>
-        <div class="chart-frame">
+        <header class="chart-header">
+          <h3 class="chart-title">Temperature</h3>
+          <dl class="chart-stats" aria-label="Temperature statistics">
+            <div class="chart-stat"><dt>Min</dt><dd id="temperatureMin">--</dd></div>
+            <div class="chart-stat"><dt>Avg</dt><dd id="temperatureAvg">--</dd></div>
+            <div class="chart-stat"><dt>Max</dt><dd id="temperatureMax">--</dd></div>
+          </dl>
+        </header>
+        <div class="chart-frame" id="temperatureChartFrame">
+          <p class="chart-empty">No temperature readings in this time range.</p>
           <canvas id="temperatureChart"></canvas>
         </div>
       </article>
 
       <article class="chart-card">
-        <h3 class="chart-title">Pressure</h3>
-        <div class="chart-frame">
+        <header class="chart-header">
+          <h3 class="chart-title">Pressure</h3>
+          <dl class="chart-stats" aria-label="Pressure statistics">
+            <div class="chart-stat"><dt>Min</dt><dd id="pressureMin">--</dd></div>
+            <div class="chart-stat"><dt>Avg</dt><dd id="pressureAvg">--</dd></div>
+            <div class="chart-stat"><dt>Max</dt><dd id="pressureMax">--</dd></div>
+          </dl>
+        </header>
+        <div class="chart-frame" id="pressureChartFrame">
+          <p class="chart-empty">No pressure readings in this time range.</p>
           <canvas id="pressureChart"></canvas>
         </div>
       </article>
 
       <article class="chart-card">
-        <h3 class="chart-title">Light level</h3>
-        <div class="chart-frame">
+        <header class="chart-header">
+          <h3 class="chart-title">Light level</h3>
+          <dl class="chart-stats" aria-label="Light level statistics">
+            <div class="chart-stat"><dt>Min</dt><dd id="lightMin">--</dd></div>
+            <div class="chart-stat"><dt>Avg</dt><dd id="lightAvg">--</dd></div>
+            <div class="chart-stat"><dt>Max</dt><dd id="lightMax">--</dd></div>
+          </dl>
+        </header>
+        <div class="chart-frame" id="lightChartFrame">
+          <p class="chart-empty">No light readings in this time range.</p>
           <canvas id="lightChart"></canvas>
         </div>
       </article>
@@ -955,6 +1041,58 @@
       }
     }
 
+    function calculateStatistics(history, field) {
+      const values = history
+        .map((entry) => entry[field])
+        .filter((value) => typeof value === "number" && Number.isFinite(value));
+
+      if (values.length === 0) {
+        return null;
+      }
+
+      const totals = values.reduce((statistics, value) => ({
+        sum: statistics.sum + value,
+        min: Math.min(statistics.min, value),
+        max: Math.max(statistics.max, value),
+      }), {
+        sum: 0,
+        min: values[0],
+        max: values[0],
+      });
+
+      return {
+        min: totals.min,
+        avg: totals.sum / values.length,
+        max: totals.max,
+      };
+    }
+
+    function formatStatistic(value, unit, fractionDigits) {
+      return `${value.toFixed(fractionDigits)} ${unit}`;
+    }
+
+    function renderChartStatistics({
+      history,
+      field,
+      prefix,
+      unit,
+      fractionDigits,
+    }) {
+      const statistics = calculateStatistics(history, field);
+      const frame = document.getElementById(`${prefix}ChartFrame`);
+
+      ["min", "avg", "max"].forEach((statistic) => {
+        const element = document.getElementById(
+          `${prefix}${statistic.charAt(0).toUpperCase()}${statistic.slice(1)}`
+        );
+        element.innerText = statistics === null
+          ? "--"
+          : formatStatistic(statistics[statistic], unit, fractionDigits);
+      });
+
+      frame.classList.toggle("empty", statistics === null);
+    }
+
     async function renderCharts() {
       const requestId = ++latestHistoryRequestId;
 
@@ -977,6 +1115,28 @@
           x: new Date(entry.receivedAt).getTime(),
           y: entry.lightLevelLux,
         }));
+
+        renderChartStatistics({
+          history,
+          field: "temperatureCelsius",
+          prefix: "temperature",
+          unit: "\u00b0C",
+          fractionDigits: 1,
+        });
+        renderChartStatistics({
+          history,
+          field: "pressureHpa",
+          prefix: "pressure",
+          unit: "hPa",
+          fractionDigits: 1,
+        });
+        renderChartStatistics({
+          history,
+          field: "lightLevelLux",
+          prefix: "light",
+          unit: "lux",
+          fractionDigits: 0,
+        });
 
         renderTemperatureChart(temperaturePoints);
         renderPressureChart(pressurePoints);
