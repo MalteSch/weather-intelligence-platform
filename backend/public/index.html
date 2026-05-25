@@ -207,19 +207,33 @@
       gap: 16px;
     }
 
-    .range-description {
-      padding: 13px 15px;
+    .selected-range {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 15px;
       border: 1px solid rgba(56, 189, 248, 0.2);
       border-radius: 12px;
       background: rgba(56, 189, 248, 0.07);
       color: var(--heading);
-      font-size: 0.96rem;
-      font-weight: 600;
+    }
+
+    .selected-range .custom-range {
+      justify-content: center;
+    }
+
+    .range-error {
+      min-height: 1.1em;
+      margin: 0;
+      color: var(--danger);
+      font-size: 0.8rem;
     }
 
     .range-picker {
       display: flex;
       align-items: end;
+      justify-content: center;
       gap: 28px;
       flex-wrap: wrap;
     }
@@ -467,8 +481,22 @@
       </div>
 
       <div class="range-controls">
-        <div class="range-description" id="rangeDescription" aria-live="polite">
-          Displaying: Last 12 hours
+        <div class="selected-range" aria-label="Displayed time range">
+          <p class="control-label">Displayed time range</p>
+          <div class="custom-range">
+            <label>
+              From
+              <input type="datetime-local" id="customFrom" step="1" />
+            </label>
+
+            <label>
+              To
+              <input type="datetime-local" id="customTo" step="1" />
+            </label>
+
+            <button class="apply-button" onclick="applyCustomRange()">Apply</button>
+          </div>
+          <p class="range-error" id="rangeError" aria-live="polite"></p>
         </div>
 
         <div class="range-picker">
@@ -479,23 +507,6 @@
               <button class="range-button" data-hours="24" onclick="setPresetRange(24)">24h</button>
               <button class="range-button" data-hours="72" onclick="setPresetRange(72)">3 days</button>
               <button class="range-button" data-hours="168" onclick="setPresetRange(168)">7 days</button>
-            </div>
-          </div>
-
-          <div class="range-group">
-            <p class="control-label">Custom range</p>
-            <div class="custom-range">
-              <label>
-                From
-                <input type="datetime-local" id="customFrom" />
-              </label>
-
-              <label>
-                To
-                <input type="datetime-local" id="customTo" />
-              </label>
-
-              <button class="apply-button" onclick="applyCustomRange()">Apply</button>
             </div>
           </div>
         </div>
@@ -543,6 +554,7 @@
     let selectedPresetHours = 12;
     let selectedFrom = null;
     let selectedTo = null;
+    const MIN_RANGE_STEP_MS = 1000;
 
     async function loadWeatherData() {
       const response = await fetch("/weather/latest");
@@ -559,6 +571,9 @@
 
       if (selectedPresetHours !== null) {
         updateSelectedPresetWindow();
+        syncRangeInputs();
+      } else {
+        updateRangeInputConstraints();
       }
 
       if (selectedFrom && selectedTo) {
@@ -581,6 +596,7 @@
 
     function updateSelectedPresetWindow() {
       selectedTo = new Date();
+      selectedTo.setMilliseconds(0);
       selectedFrom = new Date(
         selectedTo.getTime() - selectedPresetHours * 60 * 60 * 1000
       );
@@ -594,31 +610,61 @@
       });
     }
 
-    function presetLabel(hours) {
-      return hours < 48 ? `${hours} hours` : `${hours / 24} days`;
+    function formatDateTimeInputValue(timestamp) {
+      const date = new Date(timestamp);
+      const pad = (value) => String(value).padStart(2, "0");
+
+      return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate()),
+      ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
     }
 
-    function formatRangeTime(timestamp) {
-      const date = new Date(timestamp);
-      const datePart = date.toLocaleDateString("de-DE", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      });
-      const timePart = date.toLocaleTimeString("de-DE", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+    function setRangeError(message = "") {
+      document.getElementById("rangeError").innerText = message;
+    }
 
-      return `${datePart} ${timePart}`;
+    function updateRangeInputConstraints() {
+      const fromInput = document.getElementById("customFrom");
+      const toInput = document.getElementById("customTo");
+      const now = new Date();
+      const from = new Date(fromInput.value);
+      const to = new Date(toInput.value);
+
+      toInput.max = formatDateTimeInputValue(now);
+      fromInput.max = formatDateTimeInputValue(
+        !Number.isNaN(to.getTime()) && to < now
+          ? new Date(to.getTime() - MIN_RANGE_STEP_MS)
+          : now
+      );
+
+      if (!Number.isNaN(from.getTime())) {
+        toInput.min = formatDateTimeInputValue(
+          new Date(from.getTime() + MIN_RANGE_STEP_MS)
+        );
+      } else {
+        toInput.removeAttribute("min");
+      }
+    }
+
+    function syncRangeInputs() {
+      document.getElementById("customFrom").value = formatDateTimeInputValue(selectedFrom);
+      document.getElementById("customTo").value = formatDateTimeInputValue(selectedTo);
+      updateRangeInputConstraints();
+      setRangeError();
+    }
+
+    function handleRangeInput() {
+      updateRangeInputConstraints();
+      setRangeError();
     }
 
     function setPresetRange(hours) {
       selectedPresetHours = hours;
       updateSelectedPresetWindow();
+      syncRangeInputs();
       setActivePresetButton(hours);
-      document.getElementById("rangeDescription").innerText =
-        `Displaying: Last ${presetLabel(hours)}`;
 
       refreshDashboard();
     }
@@ -628,15 +674,23 @@
       const toValue = document.getElementById("customTo").value;
 
       if (!fromValue || !toValue) {
-        alert("Please select both start and end time.");
+        setRangeError("Please select both a From and To time.");
         return;
       }
 
       const from = new Date(fromValue);
       const to = new Date(toValue);
+      const now = new Date();
 
       if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) {
-        alert("The start time must be earlier than the end time.");
+        setRangeError("From must be earlier than To.");
+        updateRangeInputConstraints();
+        return;
+      }
+
+      if (from > now || to > now) {
+        setRangeError("Future dates and times cannot be selected.");
+        updateRangeInputConstraints();
         return;
       }
 
@@ -645,8 +699,7 @@
       selectedTo = to;
 
       setActivePresetButton(null);
-      document.getElementById("rangeDescription").innerText =
-        `Displaying: ${formatRangeTime(from)} \u2192 ${formatRangeTime(to)}`;
+      syncRangeInputs();
 
       refreshDashboard();
     }
@@ -889,6 +942,9 @@
         renderCharts(),
       ]);
     }
+
+    document.getElementById("customFrom").addEventListener("input", handleRangeInput);
+    document.getElementById("customTo").addEventListener("input", handleRangeInput);
 
     setPresetRange(12);
 
