@@ -27,6 +27,10 @@
       box-sizing: border-box;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
     body {
       min-height: 100vh;
       margin: 0;
@@ -396,7 +400,7 @@
     .section-heading {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
+      align-items: flex-start;
       gap: 18px;
       margin: 5px 2px 16px;
     }
@@ -405,10 +409,84 @@
       color: #bceaff;
     }
 
+    .trend-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .mode-switch {
+      display: flex;
+      padding: 3px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(7, 17, 31, 0.36);
+    }
+
+    .mode-button {
+      height: 36px;
+      padding: 0 13px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .mode-button:hover {
+      background: rgba(56, 189, 248, 0.09);
+      color: var(--text);
+    }
+
+    .mode-button.active {
+      background: rgba(56, 189, 248, 0.16);
+      color: #bceaff;
+    }
+
     .reset-zoom-button {
       flex-shrink: 0;
       border-color: rgba(56, 189, 248, 0.28);
       background: rgba(56, 189, 248, 0.09);
+    }
+
+    .overlay-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 0 2px 16px;
+      padding: 13px 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(16, 30, 51, 0.7);
+    }
+
+    .overlay-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .series-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 999px;
+      color: var(--text);
+      font-size: 0.86rem;
+      cursor: pointer;
+    }
+
+    .series-option input {
+      width: auto;
+      height: auto;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    .series-unit {
+      color: var(--muted);
+      font-size: 0.78rem;
     }
 
     .charts-grid {
@@ -469,6 +547,60 @@
     .chart-frame {
       position: relative;
       height: 290px;
+    }
+
+    .overlay-chart-card .chart-frame {
+      height: 380px;
+    }
+
+    .overlay-chart-header {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 13px;
+    }
+
+    .overlay-chart-description {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .overlay-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .overlay-stat-group {
+      min-width: min(100%, 275px);
+      padding: 10px 12px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 12px;
+      background: rgba(7, 17, 31, 0.3);
+    }
+
+    .overlay-stat-title {
+      margin: 0 0 8px;
+      font-size: 0.78rem;
+      font-weight: 650;
+    }
+
+    .overlay-stat-group .chart-stats {
+      justify-content: flex-start;
+      gap: 20px;
+    }
+
+    .temperature-series .overlay-stat-title {
+      color: #38bdf8;
+    }
+
+    .pressure-series .overlay-stat-title {
+      color: #a78bfa;
+    }
+
+    .light-series .overlay-stat-title {
+      color: #fbbf24;
     }
 
     .chart-state {
@@ -552,6 +684,25 @@
         flex-direction: column;
       }
 
+      .trend-actions {
+        align-items: stretch;
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .mode-switch {
+        width: 100%;
+      }
+
+      .mode-button {
+        flex: 1;
+      }
+
+      .overlay-controls {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
       .chart-stats {
         width: 100%;
         justify-content: space-between;
@@ -575,6 +726,10 @@
 
       .chart-frame {
         height: 235px;
+      }
+
+      .overlay-chart-card .chart-frame {
+        height: 295px;
       }
     }
   </style>
@@ -689,10 +844,34 @@
           <span class="chart-interaction-hint">Drag across a chart to zoom into a time range.</span>
         </p>
       </div>
-      <button class="reset-zoom-button" onclick="setPresetRange(12)">Back to 12h</button>
+      <div class="trend-actions">
+        <div class="mode-switch" role="group" aria-label="Chart display mode">
+          <button class="mode-button active" id="separateModeButton" aria-pressed="true" onclick="setChartMode('separate')">Separate charts</button>
+          <button class="mode-button" id="overlayModeButton" aria-pressed="false" onclick="setChartMode('overlay')">Overlay comparison</button>
+        </div>
+        <button class="reset-zoom-button" onclick="setPresetRange(12)">Back to 12h</button>
+      </div>
     </div>
 
-    <section class="charts-grid" aria-label="Weather history charts">
+    <div class="overlay-controls" id="overlayControls" hidden>
+      <p class="control-label">Compared signals</p>
+      <div class="overlay-options" aria-label="Overlay series">
+        <label class="series-option temperature-series">
+          <input type="checkbox" checked onchange="setOverlaySeries('temperature', this.checked)" />
+          Temperature <span class="series-unit">&deg;C</span>
+        </label>
+        <label class="series-option pressure-series">
+          <input type="checkbox" checked onchange="setOverlaySeries('pressure', this.checked)" />
+          Pressure <span class="series-unit">hPa</span>
+        </label>
+        <label class="series-option light-series">
+          <input type="checkbox" onchange="setOverlaySeries('light', this.checked)" />
+          Light level <span class="series-unit">lux</span>
+        </label>
+      </div>
+    </div>
+
+    <section class="charts-grid" id="separateCharts" aria-label="Weather history charts">
       <article class="chart-card">
         <header class="chart-header">
           <h3 class="chart-title">Temperature</h3>
@@ -738,6 +917,22 @@
         </div>
       </article>
     </section>
+
+    <section class="charts-grid" id="overlayCharts" aria-label="Weather comparison chart" hidden>
+      <article class="chart-card overlay-chart-card">
+        <header class="chart-header overlay-chart-header">
+          <div>
+            <h3 class="chart-title">Comparison overlay</h3>
+            <p class="overlay-chart-description">Signals use separate axes to preserve their original units.</p>
+          </div>
+          <div class="overlay-stats" id="overlayStats" aria-label="Enabled series statistics"></div>
+        </header>
+        <div class="chart-frame" id="overlayChartFrame">
+          <p class="chart-state" id="overlayChartState" aria-live="polite"></p>
+          <canvas id="overlayChart"></canvas>
+        </div>
+      </article>
+    </section>
   </main>
 
   <script>
@@ -746,14 +941,47 @@
     let temperatureChart;
     let pressureChart;
     let lightChart;
+    let overlayChart;
     let latestHistoryRequestId = 0;
     let selectedPresetHours = 12;
     let selectedFrom = null;
     let selectedTo = null;
     let hasRenderedHistory = false;
+    let chartMode = "separate";
+    const overlaySeries = {
+      temperature: true,
+      pressure: true,
+      light: false,
+    };
     const MIN_RANGE_STEP_MS = 1000;
     const MIN_ZOOM_DRAG_PIXELS = 12;
     const HEALTH_WINDOW_HOURS = 8;
+    const SERIES_CONFIG = {
+      temperature: {
+        label: "Temperature",
+        field: "temperatureCelsius",
+        unit: "\u00b0C",
+        fractionDigits: 1,
+        borderColor: "#38bdf8",
+        backgroundColor: "rgba(56, 189, 248, 0.12)",
+      },
+      pressure: {
+        label: "Pressure",
+        field: "pressureHpa",
+        unit: "hPa",
+        fractionDigits: 1,
+        borderColor: "#a78bfa",
+        backgroundColor: "rgba(167, 139, 250, 0.11)",
+      },
+      light: {
+        label: "Light level",
+        field: "lightLevelLux",
+        unit: "lux",
+        fractionDigits: 0,
+        borderColor: "#fbbf24",
+        backgroundColor: "rgba(251, 191, 36, 0.1)",
+      },
+    };
 
     async function loadWeatherData() {
       const response = await fetch("/weather/latest");
@@ -1192,29 +1420,102 @@
       });
     }
 
+    function getEnabledOverlaySeries() {
+      return Object.keys(overlaySeries).filter((series) => overlaySeries[series]);
+    }
+
+    function setChartFrameState(prefix, state = "", message = "") {
+      const frame = document.getElementById(`${prefix}ChartFrame`);
+      const stateElement = document.getElementById(`${prefix}ChartState`);
+
+      frame.classList.remove("loading", "empty", "error");
+
+      if (state) {
+        frame.classList.add(state);
+      }
+
+      stateElement.innerText = message;
+    }
+
     function setHistoryFrameState(state = "", message = "") {
       ["temperature", "pressure", "light"].forEach((prefix) => {
-        const frame = document.getElementById(`${prefix}ChartFrame`);
-        const stateElement = document.getElementById(`${prefix}ChartState`);
-
-        frame.classList.remove("loading", "empty", "error");
-
-        if (state) {
-          frame.classList.add(state);
-        }
-
-        stateElement.innerText = message;
+        setChartFrameState(prefix, state, message);
       });
     }
 
+    function setOverlayFrameState(state = "", message = "") {
+      setChartFrameState("overlay", state, message);
+    }
+
+    function renderOverlayStatistics(history) {
+      const overlayStats = document.getElementById("overlayStats");
+
+      overlayStats.innerHTML = getEnabledOverlaySeries().map((series) => {
+        const config = SERIES_CONFIG[series];
+        const statistics = calculateStatistics(history, config.field);
+        const statisticValue = (statistic) => statistics === null
+          ? "--"
+          : formatStatistic(statistics[statistic], config.unit, config.fractionDigits);
+
+        return `
+          <div class="overlay-stat-group ${series}-series">
+            <p class="overlay-stat-title">${config.label}</p>
+            <dl class="chart-stats" aria-label="${config.label} statistics">
+              <div class="chart-stat"><dt>Min</dt><dd>${statisticValue("min")}</dd></div>
+              <div class="chart-stat"><dt>Avg</dt><dd>${statisticValue("avg")}</dd></div>
+              <div class="chart-stat"><dt>Max</dt><dd>${statisticValue("max")}</dd></div>
+            </dl>
+          </div>
+        `;
+      }).join("");
+    }
+
     function setHistoryLoadingState() {
+      if (chartMode === "overlay") {
+        renderOverlayStatistics([]);
+        if (getEnabledOverlaySeries().length === 0) {
+          destroyOverlayChart();
+          setOverlayFrameState("empty", "Select at least one series to compare");
+          return;
+        }
+
+        setOverlayFrameState("loading", "Loading history\u2026");
+        return;
+      }
+
       setChartStatisticsPlaceholder();
       setHistoryFrameState("loading", "Loading history\u2026");
     }
 
     function setHistoryEmptyState() {
+      if (chartMode === "overlay") {
+        renderOverlayStatistics([]);
+        const message = getEnabledOverlaySeries().length === 0
+          ? "Select at least one series to compare"
+          : "No measurements in selected range";
+        setOverlayFrameState("empty", message);
+        return;
+      }
+
       setChartStatisticsPlaceholder();
       setHistoryFrameState("empty", "No measurements in selected range");
+    }
+
+    function setHistoryErrorState() {
+      if (chartMode === "overlay") {
+        renderOverlayStatistics([]);
+        if (getEnabledOverlaySeries().length === 0) {
+          destroyOverlayChart();
+          setOverlayFrameState("empty", "Select at least one series to compare");
+          return;
+        }
+
+        setOverlayFrameState("error", "History currently unavailable");
+        return;
+      }
+
+      setChartStatisticsPlaceholder();
+      setHistoryFrameState("error", "History currently unavailable");
     }
 
     function renderChartStatistics({
@@ -1236,6 +1537,43 @@
       });
     }
 
+    function setChartMode(mode) {
+      if (!["separate", "overlay"].includes(mode) || chartMode === mode) {
+        return;
+      }
+
+      chartMode = mode;
+      const isOverlay = mode === "overlay";
+
+      document.getElementById("separateCharts").hidden = isOverlay;
+      document.getElementById("overlayCharts").hidden = !isOverlay;
+      document.getElementById("overlayControls").hidden = !isOverlay;
+      document.getElementById("separateModeButton").classList.toggle("active", !isOverlay);
+      document.getElementById("overlayModeButton").classList.toggle("active", isOverlay);
+      document.getElementById("separateModeButton").setAttribute("aria-pressed", String(!isOverlay));
+      document.getElementById("overlayModeButton").setAttribute("aria-pressed", String(isOverlay));
+
+      if (isOverlay) {
+        destroySeparateCharts();
+      } else {
+        destroyOverlayChart();
+      }
+
+      renderCharts({ showLoading: true });
+    }
+
+    function setOverlaySeries(series, isEnabled) {
+      if (!Object.prototype.hasOwnProperty.call(overlaySeries, series)) {
+        return;
+      }
+
+      overlaySeries[series] = isEnabled;
+
+      if (chartMode === "overlay") {
+        renderCharts({ showLoading: true });
+      }
+    }
+
     async function renderCharts({ showLoading = false } = {}) {
       const requestId = ++latestHistoryRequestId;
 
@@ -1250,50 +1588,67 @@
           return;
         }
 
+        const points = Object.fromEntries(
+          Object.entries(SERIES_CONFIG).map(([series, config]) => [
+            series,
+            history.map((entry) => ({
+              x: new Date(entry.receivedAt).getTime(),
+              y: entry[config.field],
+            })),
+          ])
+        );
+
+        if (chartMode === "overlay") {
+          const enabledSeries = getEnabledOverlaySeries();
+
+          renderOverlayStatistics(history);
+
+          if (enabledSeries.length === 0) {
+            destroyOverlayChart();
+            setOverlayFrameState("empty", "Select at least one series to compare");
+          } else {
+            setOverlayFrameState(
+              history.length === 0 ? "empty" : "",
+              history.length === 0 ? "No measurements in selected range" : ""
+            );
+            renderOverlayChart(points);
+          }
+
+          hasRenderedHistory = true;
+          return;
+        }
+
         if (history.length === 0) {
           setHistoryEmptyState();
         } else {
           setHistoryFrameState();
         }
 
-        const temperaturePoints = history.map((entry) => ({
-          x: new Date(entry.receivedAt).getTime(),
-          y: entry.temperatureCelsius,
-        }));
-        const pressurePoints = history.map((entry) => ({
-          x: new Date(entry.receivedAt).getTime(),
-          y: entry.pressureHpa,
-        }));
-        const lightPoints = history.map((entry) => ({
-          x: new Date(entry.receivedAt).getTime(),
-          y: entry.lightLevelLux,
-        }));
-
         renderChartStatistics({
           history,
-          field: "temperatureCelsius",
+          field: SERIES_CONFIG.temperature.field,
           prefix: "temperature",
-          unit: "\u00b0C",
-          fractionDigits: 1,
+          unit: SERIES_CONFIG.temperature.unit,
+          fractionDigits: SERIES_CONFIG.temperature.fractionDigits,
         });
         renderChartStatistics({
           history,
-          field: "pressureHpa",
+          field: SERIES_CONFIG.pressure.field,
           prefix: "pressure",
-          unit: "hPa",
-          fractionDigits: 1,
+          unit: SERIES_CONFIG.pressure.unit,
+          fractionDigits: SERIES_CONFIG.pressure.fractionDigits,
         });
         renderChartStatistics({
           history,
-          field: "lightLevelLux",
+          field: SERIES_CONFIG.light.field,
           prefix: "light",
-          unit: "lux",
-          fractionDigits: 0,
+          unit: SERIES_CONFIG.light.unit,
+          fractionDigits: SERIES_CONFIG.light.fractionDigits,
         });
 
-        renderTemperatureChart(temperaturePoints);
-        renderPressureChart(pressurePoints);
-        renderLightChart(lightPoints);
+        renderTemperatureChart(points.temperature);
+        renderPressureChart(points.pressure);
+        renderLightChart(points.light);
         hasRenderedHistory = true;
       } catch (error) {
         if (requestId !== latestHistoryRequestId) {
@@ -1301,12 +1656,60 @@
         }
 
         console.error("Failed to load weather history:", error);
-        setChartStatisticsPlaceholder();
-        setHistoryFrameState("error", "History currently unavailable");
+        setHistoryErrorState();
       }
     }
 
-    function chartOptions() {
+    function timeScaleOptions() {
+      return {
+        type: "time",
+        min: selectedFrom ? selectedFrom.getTime() : undefined,
+        max: selectedTo ? selectedTo.getTime() : undefined,
+        time: {
+          tooltipFormat: "dd.MM.yyyy HH:mm:ss",
+        },
+        grid: {
+          color: "rgba(148, 163, 184, 0.08)",
+        },
+        ticks: {
+          color: "#8da2be",
+          maxTicksLimit: 8,
+        },
+      };
+    }
+
+    function overlayScales() {
+      const scales = { x: timeScaleOptions() };
+
+      getEnabledOverlaySeries().forEach((series, index) => {
+        const config = SERIES_CONFIG[series];
+
+        scales[series] = {
+          type: "linear",
+          position: index === 0 ? "left" : "right",
+          offset: index > 1,
+          title: {
+            display: true,
+            text: config.unit,
+            color: config.borderColor,
+          },
+          border: {
+            color: config.borderColor,
+          },
+          grid: {
+            drawOnChartArea: index === 0,
+            color: "rgba(148, 163, 184, 0.08)",
+          },
+          ticks: {
+            color: config.borderColor,
+          },
+        };
+      });
+
+      return scales;
+    }
+
+    function chartOptions({ isOverlay = false } = {}) {
       return {
         responsive: true,
         maintainAspectRatio: false,
@@ -1318,7 +1721,29 @@
         },
         plugins: {
           legend: {
-            display: false,
+            display: isOverlay,
+            labels: {
+              color: "#e5eefb",
+              usePointStyle: true,
+              pointStyle: "line",
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const config = SERIES_CONFIG[context.dataset.series];
+
+                if (!config || !Number.isFinite(context.parsed.y)) {
+                  return context.dataset.label;
+                }
+
+                return `${config.label}: ${formatStatistic(
+                  context.parsed.y,
+                  config.unit,
+                  config.fractionDigits
+                )}`;
+              },
+            },
           },
           zoom: {
             pan: {
@@ -1343,22 +1768,8 @@
             },
           },
         },
-        scales: {
-          x: {
-            type: "time",
-            min: selectedFrom ? selectedFrom.getTime() : undefined,
-            max: selectedTo ? selectedTo.getTime() : undefined,
-            time: {
-              tooltipFormat: "dd.MM.yyyy HH:mm:ss",
-            },
-            grid: {
-              color: "rgba(148, 163, 184, 0.08)",
-            },
-            ticks: {
-              color: "#8da2be",
-              maxTicksLimit: 8,
-            },
-          },
+        scales: isOverlay ? overlayScales() : {
+          x: timeScaleOptions(),
           y: {
             grid: {
               color: "rgba(148, 163, 184, 0.08)",
@@ -1372,7 +1783,7 @@
     }
 
     function resetChartZooms() {
-      [temperatureChart, pressureChart, lightChart].forEach((chart) => {
+      [temperatureChart, pressureChart, lightChart, overlayChart].forEach((chart) => {
         if (chart && typeof chart.resetZoom === "function") {
           chart.resetZoom();
         }
@@ -1395,8 +1806,26 @@
       setFixedRange(new Date(fromTimestamp), new Date(toTimestamp));
     }
 
-    function updateChartData(chart, points) {
-      chart.data.datasets[0].data = points;
+    function createLineDataset(series, points, { isOverlay = false } = {}) {
+      const config = SERIES_CONFIG[series];
+
+      return {
+        label: config.label,
+        series,
+        data: points,
+        yAxisID: isOverlay ? series : "y",
+        borderColor: config.borderColor,
+        backgroundColor: config.backgroundColor,
+        borderWidth: 2,
+        fill: !isOverlay,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.24,
+      };
+    }
+
+    function updateChartData(chart, dataset) {
+      chart.data.datasets = [dataset];
       chart.options.scales.x.min = selectedFrom ? selectedFrom.getTime() : undefined;
       chart.options.scales.x.max = selectedTo ? selectedTo.getTime() : undefined;
       chart.update("none");
@@ -1404,26 +1833,17 @@
 
     function renderTemperatureChart(temperaturePoints) {
       const context = document.getElementById("temperatureChart").getContext("2d");
+      const dataset = createLineDataset("temperature", temperaturePoints);
 
       if (temperatureChart) {
-        updateChartData(temperatureChart, temperaturePoints);
+        updateChartData(temperatureChart, dataset);
         return;
       }
 
       temperatureChart = new Chart(context, {
         type: "line",
         data: {
-          datasets: [{
-            label: "Temperature \u00b0C",
-            data: temperaturePoints,
-            borderColor: "#38bdf8",
-            backgroundColor: "rgba(56, 189, 248, 0.12)",
-            borderWidth: 2,
-            fill: true,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            tension: 0.24,
-          }],
+          datasets: [dataset],
         },
         options: chartOptions(),
       });
@@ -1431,26 +1851,17 @@
 
     function renderPressureChart(pressurePoints) {
       const context = document.getElementById("pressureChart").getContext("2d");
+      const dataset = createLineDataset("pressure", pressurePoints);
 
       if (pressureChart) {
-        updateChartData(pressureChart, pressurePoints);
+        updateChartData(pressureChart, dataset);
         return;
       }
 
       pressureChart = new Chart(context, {
         type: "line",
         data: {
-          datasets: [{
-            label: "Pressure hPa",
-            data: pressurePoints,
-            borderColor: "#a78bfa",
-            backgroundColor: "rgba(167, 139, 250, 0.11)",
-            borderWidth: 2,
-            fill: true,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            tension: 0.24,
-          }],
+          datasets: [dataset],
         },
         options: chartOptions(),
       });
@@ -1458,29 +1869,59 @@
 
     function renderLightChart(lightPoints) {
       const context = document.getElementById("lightChart").getContext("2d");
+      const dataset = createLineDataset("light", lightPoints);
 
       if (lightChart) {
-        updateChartData(lightChart, lightPoints);
+        updateChartData(lightChart, dataset);
         return;
       }
 
       lightChart = new Chart(context, {
         type: "line",
         data: {
-          datasets: [{
-            label: "Light level lux",
-            data: lightPoints,
-            borderColor: "#fbbf24",
-            backgroundColor: "rgba(251, 191, 36, 0.1)",
-            borderWidth: 2,
-            fill: true,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            tension: 0.24,
-          }],
+          datasets: [dataset],
         },
         options: chartOptions(),
       });
+    }
+
+    function renderOverlayChart(points) {
+      const datasets = getEnabledOverlaySeries().map((series) =>
+        createLineDataset(series, points[series], { isOverlay: true })
+      );
+      const context = document.getElementById("overlayChart").getContext("2d");
+
+      if (overlayChart) {
+        overlayChart.data.datasets = datasets;
+        overlayChart.options.scales = overlayScales();
+        overlayChart.update("none");
+        return;
+      }
+
+      overlayChart = new Chart(context, {
+        type: "line",
+        data: { datasets },
+        options: chartOptions({ isOverlay: true }),
+      });
+    }
+
+    function destroySeparateCharts() {
+      [temperatureChart, pressureChart, lightChart].forEach((chart) => {
+        if (chart) {
+          chart.destroy();
+        }
+      });
+
+      temperatureChart = undefined;
+      pressureChart = undefined;
+      lightChart = undefined;
+    }
+
+    function destroyOverlayChart() {
+      if (overlayChart) {
+        overlayChart.destroy();
+        overlayChart = undefined;
+      }
     }
 
     async function refreshDashboard({ showHistoryLoading = false } = {}) {
