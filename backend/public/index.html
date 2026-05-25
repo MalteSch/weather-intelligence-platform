@@ -948,6 +948,7 @@
     let selectedTo = null;
     let hasRenderedHistory = false;
     let chartMode = "separate";
+    let isResettingZoom = false;
     const overlaySeries = {
       temperature: true,
       pressure: true,
@@ -1149,7 +1150,7 @@
       refreshDashboard({ showHistoryLoading: true });
     }
 
-    function setFixedRange(from, to) {
+    function setFixedRange(from, to, { resetZoom = true } = {}) {
       selectedPresetHours = null;
       selectedFrom = from;
       selectedTo = to;
@@ -1157,7 +1158,9 @@
       setActivePresetButton(null);
       syncRangeInputs();
       updateRangeDescription();
-      resetChartZooms();
+      if (resetZoom) {
+        resetChartZooms();
+      }
 
       refreshDashboard({ showHistoryLoading: true });
     }
@@ -1783,14 +1786,28 @@
     }
 
     function resetChartZooms() {
-      [temperatureChart, pressureChart, lightChart, overlayChart].forEach((chart) => {
-        if (chart && typeof chart.resetZoom === "function") {
-          chart.resetZoom();
-        }
-      });
+      if (isResettingZoom) {
+        return;
+      }
+
+      isResettingZoom = true;
+
+      try {
+        [temperatureChart, pressureChart, lightChart, overlayChart].forEach((chart) => {
+          if (chart && typeof chart.resetZoom === "function") {
+            chart.resetZoom();
+          }
+        });
+      } finally {
+        isResettingZoom = false;
+      }
     }
 
     function applyChartZoomRange({ chart }) {
+      if (isResettingZoom) {
+        return;
+      }
+
       const fromTimestamp = chart.scales.x.min;
       const toTimestamp = chart.scales.x.max;
 
@@ -1803,7 +1820,7 @@
         return;
       }
 
-      setFixedRange(new Date(fromTimestamp), new Date(toTimestamp));
+      setFixedRange(new Date(fromTimestamp), new Date(toTimestamp), { resetZoom: false });
     }
 
     function createLineDataset(series, points, { isOverlay = false } = {}) {
