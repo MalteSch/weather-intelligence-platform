@@ -281,29 +281,25 @@
       font-size: 0.8rem;
     }
 
-    .range-picker {
-      display: flex;
-      align-items: end;
-      justify-content: center;
-      gap: 34px;
-      flex-wrap: wrap;
+    .range-control-grid {
+      display: grid;
+      grid-template-columns: minmax(270px, 0.85fr) minmax(510px, 1.45fr);
+      align-items: stretch;
+      gap: 14px;
     }
 
     .range-group {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 12px;
     }
 
-    .preset-group {
-      align-items: center;
-    }
-
-    .custom-range-group {
-      padding: 12px 14px 8px;
+    .range-control-card {
+      min-width: 0;
+      padding: 14px;
       border-radius: 12px;
       background: rgba(7, 17, 31, 0.34);
-      border: 1px solid rgba(148, 163, 184, 0.1);
+      border: 1px solid rgba(148, 163, 184, 0.14);
     }
 
     .control-label {
@@ -315,12 +311,23 @@
       text-transform: uppercase;
     }
 
-    .time-controls,
-    .custom-range {
-      display: flex;
+    .time-controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       align-items: end;
       gap: 9px;
-      flex-wrap: wrap;
+    }
+
+    .time-controls button {
+      min-width: 0;
+      padding: 0 12px;
+    }
+
+    .custom-range {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(175px, 1fr)) auto;
+      align-items: end;
+      gap: 9px;
     }
 
     button {
@@ -374,6 +381,8 @@
     }
 
     input {
+      width: 100%;
+      min-width: 0;
       height: 40px;
       padding: 0 10px;
       border: 1px solid #31465e;
@@ -492,8 +501,14 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
 
-      .range-picker {
-        gap: 18px;
+      .range-control-grid {
+        grid-template-columns: minmax(245px, 0.8fr) minmax(0, 1.45fr);
+      }
+    }
+
+    @media (max-width: 860px) {
+      .range-control-grid {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -543,25 +558,19 @@
         gap: 12px;
       }
 
-      .range-picker,
+      .range-control-grid,
       .range-group,
       .time-controls,
       .custom-range {
         width: 100%;
       }
 
-      .preset-group {
-        align-items: stretch;
+      .time-controls {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      .time-controls button {
-        flex: 1 1 calc(50% - 5px);
-      }
-
-      .custom-range label,
-      .custom-range input,
-      .apply-button {
-        width: 100%;
+      .custom-range {
+        grid-template-columns: 1fr;
       }
 
       .chart-frame {
@@ -640,8 +649,8 @@
           <p class="range-hint" id="rangeHint">Continuously tracks the latest readings.</p>
         </div>
 
-        <div class="range-picker">
-          <div class="range-group preset-group">
+        <div class="range-control-grid">
+          <div class="range-control-card range-group preset-group">
             <p class="control-label">Presets</p>
             <div class="time-controls" aria-label="Preset time ranges">
               <button class="range-button" data-hours="12" onclick="setPresetRange(12)">12h</button>
@@ -651,7 +660,7 @@
             </div>
           </div>
 
-          <div class="range-group custom-range-group">
+          <div class="range-control-card range-group custom-range-group">
             <p class="control-label">Custom fixed range</p>
             <div class="custom-range">
               <label>
