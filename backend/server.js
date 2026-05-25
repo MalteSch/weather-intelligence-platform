@@ -30,6 +30,14 @@ function validateWeatherMeasurement(payload) {
     errors.push("wifiRssiDbm must be a number");
   }
 
+  if (
+    payload.firmwareVersion !== undefined &&
+    payload.firmwareVersion !== null &&
+    typeof payload.firmwareVersion !== "string"
+  ) {
+    errors.push("firmwareVersion must be a string");
+  }
+
   return errors;
 }
 
@@ -56,9 +64,10 @@ app.post("/weather", (req, res) => {
       pressure_hpa,
       light_level_lux,
       wifi_rssi_dbm,
+      firmware_version,
       received_at
     )
-    VALUES (?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?)
   `;
 
   db.run(
@@ -68,6 +77,7 @@ app.post("/weather", (req, res) => {
       measurement.pressureHpa,
       measurement.lightLevelLux,
       measurement.wifiRssiDbm,
+      measurement.firmwareVersion ?? null,
       measurement.receivedAt,
     ],
     function (error) {
@@ -105,6 +115,7 @@ app.get("/weather/latest", (req, res) => {
       pressure_hpa,
       light_level_lux,
       wifi_rssi_dbm,
+      firmware_version,
       received_at
     FROM weather_measurements
     ORDER BY received_at DESC
@@ -134,6 +145,7 @@ app.get("/weather/latest", (req, res) => {
       pressureHpa: row.pressure_hpa,
       lightLevelLux: row.light_level_lux,
       wifiRssiDbm: row.wifi_rssi_dbm,
+      firmwareVersion: row.firmware_version,
       receivedAt: row.received_at,
     });
   });
@@ -150,6 +162,7 @@ app.get("/weather/history", (req, res) => {
       pressure_hpa,
       light_level_lux,
       wifi_rssi_dbm,
+      firmware_version,
       received_at
     FROM weather_measurements
   `;
@@ -171,6 +184,7 @@ app.get("/weather/history", (req, res) => {
         pressure_hpa,
         light_level_lux,
         wifi_rssi_dbm,
+        firmware_version,
         received_at
       FROM (
         SELECT
@@ -179,6 +193,7 @@ app.get("/weather/history", (req, res) => {
           pressure_hpa,
           light_level_lux,
           wifi_rssi_dbm,
+          firmware_version,
           received_at
         FROM weather_measurements
         ORDER BY received_at DESC
@@ -204,6 +219,7 @@ app.get("/weather/history", (req, res) => {
       pressureHpa: row.pressure_hpa,
       lightLevelLux: row.light_level_lux,
       wifiRssiDbm: row.wifi_rssi_dbm,
+      firmwareVersion: row.firmware_version,
       receivedAt: row.received_at,
     }));
 
@@ -217,6 +233,13 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Weather backend listening on port ${PORT}`);
-});
+db.ready
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Weather backend listening on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error("Failed to initialize SQLite database:", error.message);
+    process.exitCode = 1;
+  });

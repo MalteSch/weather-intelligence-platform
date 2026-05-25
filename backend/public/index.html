@@ -128,6 +128,11 @@
       line-height: 1.45;
     }
 
+    .firmware-detail {
+      margin-top: 7px;
+      font-size: 0.78rem;
+    }
+
     .summary-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -443,6 +448,7 @@
           <span id="connectivityStatus">Connecting</span>
         </span>
         <p class="connection-detail" id="statusDetail">Waiting for sensor data...</p>
+        <p class="connection-detail firmware-detail" id="firmwareVersion">Firmware: unknown</p>
       </div>
     </header>
 
@@ -771,6 +777,8 @@
           `${data.lightLevelLux} lux`;
         document.getElementById("wifi").innerText =
           `${data.wifiRssiDbm} dBm`;
+        document.getElementById("firmwareVersion").innerText =
+          `Firmware: ${data.firmwareVersion || "unknown"}`;
 
         renderLatestStatus(data.receivedAt);
       } catch (error) {
