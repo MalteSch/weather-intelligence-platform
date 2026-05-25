@@ -7,95 +7,367 @@
   <title>Weather Intelligence Platform</title>
 
   <style>
+    :root {
+      color-scheme: dark;
+      --background: #07111f;
+      --surface: #101e33;
+      --surface-raised: #14253e;
+      --border: rgba(148, 163, 184, 0.14);
+      --muted: #8da2be;
+      --text: #e5eefb;
+      --heading: #f8fbff;
+      --accent: #38bdf8;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --shadow: 0 18px 44px rgba(2, 8, 23, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      min-height: 100vh;
       margin: 0;
-      padding: 40px;
+      background:
+        radial-gradient(circle at top right, rgba(56, 189, 248, 0.13), transparent 32rem),
+        var(--background);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    .dashboard {
+      width: min(1280px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 36px 0 40px;
+    }
+
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    .eyebrow {
+      margin: 0 0 9px;
+      color: var(--accent);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
     }
 
     h1 {
-      margin-bottom: 30px;
+      margin: 0;
+      color: var(--heading);
+      font-size: clamp(1.85rem, 3vw, 2.5rem);
+      font-weight: 680;
+      letter-spacing: -0.04em;
     }
 
-    .card {
-      background: #1e293b;
-      border-radius: 12px;
-      padding: 24px;
-      max-width: 900px;
-      margin-bottom: 24px;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+    .subtitle {
+      max-width: 560px;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 0.96rem;
+      line-height: 1.5;
     }
 
-    .value-grid {
+    .connection-panel {
+      min-width: 235px;
+      padding: 16px 18px;
+      background: rgba(16, 30, 51, 0.76);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 7px 12px;
+      color: var(--muted);
+      background: rgba(148, 163, 184, 0.12);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .status-pill::before {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      content: "";
+    }
+
+    .status-pill.online {
+      color: var(--success);
+      background: rgba(52, 211, 153, 0.12);
+    }
+
+    .status-pill.stale {
+      color: var(--warning);
+      background: rgba(251, 191, 36, 0.13);
+    }
+
+    .status-pill.unavailable {
+      color: var(--danger);
+      background: rgba(248, 113, 113, 0.12);
+    }
+
+    .connection-detail {
+      margin: 13px 0 0;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
     }
 
-    .value {
-      font-size: 2rem;
-      margin-bottom: 16px;
+    .metric-card,
+    .panel,
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
     }
 
-    .label {
-      color: #94a3b8;
-      font-size: 0.9rem;
+    .metric-card {
+      min-height: 122px;
+      padding: 18px 18px 16px;
     }
 
-    .updated {
-      margin-top: 20px;
-      color: #94a3b8;
-      font-size: 0.85rem;
+    .metric-label {
+      margin-bottom: 17px;
+      color: var(--muted);
+      font-size: 0.77rem;
+      font-weight: 650;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
-    canvas {
-      max-height: 320px;
+    .metric-value {
+      color: var(--heading);
+      font-size: clamp(1.35rem, 2.3vw, 1.85rem);
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      white-space: nowrap;
     }
 
-    .time-controls {
+    .metric-value.timestamp {
+      font-size: clamp(1.05rem, 1.55vw, 1.25rem);
+    }
+
+    .metric-detail {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .panel {
       display: flex;
-      gap: 12px;
+      justify-content: space-between;
+      align-items: end;
+      gap: 30px;
+      margin-bottom: 22px;
+      padding: 20px 22px;
+    }
+
+    .panel-heading h2,
+    .section-heading h2 {
+      margin: 0;
+      color: var(--heading);
+      font-size: 1.1rem;
+      font-weight: 620;
+    }
+
+    .panel-heading p,
+    .section-heading p {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .range-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 13px;
+    }
+
+    .time-controls,
+    .custom-range {
+      display: flex;
+      align-items: end;
+      gap: 9px;
       flex-wrap: wrap;
-      margin-top: 12px;
-      margin-bottom: 20px;
     }
 
     button {
-      background: #334155;
-      color: #e2e8f0;
-      border: none;
-      border-radius: 8px;
-      padding: 10px 14px;
+      height: 40px;
+      padding: 0 15px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: #1b314f;
+      color: var(--text);
       cursor: pointer;
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 550;
+      transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
     }
 
     button:hover {
-      background: #475569;
+      background: #264365;
     }
 
-    .custom-range {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      align-items: end;
+    button:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .range-button.active {
+      border-color: rgba(56, 189, 248, 0.55);
+      background: rgba(56, 189, 248, 0.16);
+      color: #bceaff;
+    }
+
+    .apply-button {
+      background: var(--accent);
+      color: #072337;
+    }
+
+    .apply-button:hover {
+      background: #7dd3fc;
     }
 
     .custom-range label {
       display: flex;
       flex-direction: column;
       gap: 6px;
-      color: #94a3b8;
-      font-size: 0.9rem;
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
 
     input {
-      background: #0f172a;
-      color: #e2e8f0;
-      border: 1px solid #475569;
-      border-radius: 8px;
-      padding: 8px;
+      height: 40px;
+      padding: 0 10px;
+      border: 1px solid #31465e;
+      border-radius: 10px;
+      background: #091726;
+      color: var(--text);
+      font: inherit;
+      font-size: 0.87rem;
+    }
+
+    .section-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 18px;
+      margin: 5px 2px 16px;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .chart-card {
+      min-height: 350px;
+      padding: 19px 19px 15px;
+    }
+
+    .chart-card:first-child {
+      grid-column: 1 / -1;
+    }
+
+    .chart-title {
+      margin: 0 0 15px;
+      color: var(--heading);
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .chart-frame {
+      position: relative;
+      height: 290px;
+    }
+
+    @media (max-width: 1020px) {
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .panel {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .range-controls {
+        align-items: flex-start;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .dashboard {
+        width: min(100% - 30px, 560px);
+        padding-top: 22px;
+      }
+
+      .dashboard-header {
+        flex-direction: column;
+        margin-bottom: 21px;
+      }
+
+      .connection-panel {
+        width: 100%;
+      }
+
+      .summary-grid,
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .metric-card {
+        min-height: 105px;
+      }
+
+      .panel,
+      .chart-card {
+        padding: 17px;
+      }
+
+      .custom-range label,
+      .custom-range input,
+      .apply-button {
+        width: 100%;
+      }
+
+      .chart-card:first-child {
+        grid-column: auto;
+      }
+
+      .chart-frame {
+        height: 235px;
+      }
     }
   </style>
 
@@ -104,79 +376,120 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
 </head>
 <body>
-
-  <h1>Weather Intelligence Platform</h1>
-
-  <div class="card">
-    <div class="value-grid">
+  <main class="dashboard">
+    <header class="dashboard-header">
       <div>
-        <div class="label">Temperature</div>
-        <div class="value" id="temperature">-- °C</div>
+        <p class="eyebrow">Environmental monitoring</p>
+        <h1>Weather Intelligence Platform</h1>
+        <p class="subtitle">
+          Live readings and historical trends from the ESP32 weather station.
+        </p>
       </div>
 
-      <div>
-        <div class="label">Pressure</div>
-        <div class="value" id="pressure">-- hPa</div>
+      <div class="connection-panel" aria-live="polite">
+        <span class="status-pill" id="statusIndicator">
+          <span id="connectivityStatus">Connecting</span>
+        </span>
+        <p class="connection-detail" id="statusDetail">Waiting for sensor data...</p>
+      </div>
+    </header>
+
+    <section class="summary-grid" aria-label="Latest weather readings">
+      <article class="metric-card">
+        <div class="metric-label">Temperature</div>
+        <div class="metric-value" id="temperature">-- &deg;C</div>
+      </article>
+
+      <article class="metric-card">
+        <div class="metric-label">Pressure</div>
+        <div class="metric-value" id="pressure">-- hPa</div>
+      </article>
+
+      <article class="metric-card">
+        <div class="metric-label">Light level</div>
+        <div class="metric-value" id="light">-- lux</div>
+      </article>
+
+      <article class="metric-card">
+        <div class="metric-label">WiFi RSSI</div>
+        <div class="metric-value" id="wifi">-- dBm</div>
+      </article>
+
+      <article class="metric-card">
+        <div class="metric-label">Last update</div>
+        <div class="metric-value timestamp" id="updated">--</div>
+        <p class="metric-detail" id="updatedDetail">Waiting for data</p>
+      </article>
+    </section>
+
+    <section class="panel" aria-label="Time range filters">
+      <div class="panel-heading">
+        <h2>Observation window</h2>
+        <p id="rangeDescription">Displaying the latest 12 hours</p>
       </div>
 
-      <div>
-        <div class="label">Light</div>
-        <div class="value" id="light">-- lux</div>
-      </div>
+      <div class="range-controls">
+        <div class="time-controls" aria-label="Preset time ranges">
+          <button class="range-button" data-hours="12" onclick="setPresetRange(12)">12h</button>
+          <button class="range-button" data-hours="24" onclick="setPresetRange(24)">24h</button>
+          <button class="range-button" data-hours="72" onclick="setPresetRange(72)">3 days</button>
+          <button class="range-button" data-hours="168" onclick="setPresetRange(168)">7 days</button>
+        </div>
 
+        <div class="custom-range">
+          <label>
+            From
+            <input type="datetime-local" id="customFrom" />
+          </label>
+
+          <label>
+            To
+            <input type="datetime-local" id="customTo" />
+          </label>
+
+          <button class="apply-button" onclick="applyCustomRange()">Apply</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-heading">
       <div>
-        <div class="label">WiFi Signal</div>
-        <div class="value" id="wifi">-- dBm</div>
+        <h2>Historical trends</h2>
+        <p>Readings refresh automatically every 5 seconds</p>
       </div>
     </div>
 
-    <div class="updated" id="updated">
-      Waiting for data...
-    </div>
-  </div>
+    <section class="charts-grid" aria-label="Weather history charts">
+      <article class="chart-card">
+        <h3 class="chart-title">Temperature</h3>
+        <div class="chart-frame">
+          <canvas id="temperatureChart"></canvas>
+        </div>
+      </article>
 
-  <div class="card">
-    <div class="label">Time range</div>
+      <article class="chart-card">
+        <h3 class="chart-title">Pressure</h3>
+        <div class="chart-frame">
+          <canvas id="pressureChart"></canvas>
+        </div>
+      </article>
 
-    <div class="time-controls">
-      <button onclick="setPresetRange(12)">12h</button>
-      <button onclick="setPresetRange(24)">24h</button>
-      <button onclick="setPresetRange(72)">3 days</button>
-      <button onclick="setPresetRange(168)">7 days</button>
-    </div>
-
-    <div class="custom-range">
-      <label>
-        From
-        <input type="datetime-local" id="customFrom" />
-      </label>
-
-      <label>
-        To
-        <input type="datetime-local" id="customTo" />
-      </label>
-
-      <button onclick="applyCustomRange()">Apply</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <canvas id="temperatureChart"></canvas>
-  </div>
-
-  <div class="card">
-    <canvas id="pressureChart"></canvas>
-  </div>
-
-  <div class="card">
-    <canvas id="lightChart"></canvas>
-  </div>
+      <article class="chart-card">
+        <h3 class="chart-title">Light level</h3>
+        <div class="chart-frame">
+          <canvas id="lightChart"></canvas>
+        </div>
+      </article>
+    </section>
+  </main>
 
   <script>
+    const RECENT_DATA_THRESHOLD_MS = 5 * 60 * 1000;
+
     let temperatureChart;
     let pressureChart;
     let lightChart;
-
+    let selectedPresetHours = 12;
     let selectedFrom = null;
     let selectedTo = null;
 
@@ -192,11 +505,18 @@
 
     async function loadWeatherHistory() {
       let url = "/weather/history";
+      let from = selectedFrom;
+      let to = selectedTo;
 
-      if (selectedFrom && selectedTo) {
+      if (selectedPresetHours !== null) {
+        to = new Date();
+        from = new Date(to.getTime() - selectedPresetHours * 60 * 60 * 1000);
+      }
+
+      if (from && to) {
         const params = new URLSearchParams({
-          from: selectedFrom.toISOString(),
-          to: selectedTo.toISOString(),
+          from: from.toISOString(),
+          to: to.toISOString(),
         });
 
         url += `?${params.toString()}`;
@@ -212,10 +532,19 @@
     }
 
     function setPresetRange(hours) {
-      selectedTo = new Date();
-      selectedFrom = new Date(
-        selectedTo.getTime() - hours * 60 * 60 * 1000
-      );
+      selectedPresetHours = hours;
+      selectedFrom = null;
+      selectedTo = null;
+
+      document.querySelectorAll(".range-button").forEach((button) => {
+        const isActive = Number(button.dataset.hours) === hours;
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-pressed", isActive);
+      });
+
+      const label = hours < 48 ? `${hours} hours` : `${hours / 24} days`;
+      document.getElementById("rangeDescription").innerText =
+        `Displaying the latest ${label}`;
 
       refreshDashboard();
     }
@@ -229,8 +558,25 @@
         return;
       }
 
-      selectedFrom = new Date(fromValue);
-      selectedTo = new Date(toValue);
+      const from = new Date(fromValue);
+      const to = new Date(toValue);
+
+      if (from >= to) {
+        alert("The start time must be earlier than the end time.");
+        return;
+      }
+
+      selectedPresetHours = null;
+      selectedFrom = from;
+      selectedTo = to;
+
+      document.querySelectorAll(".range-button").forEach((button) => {
+        button.classList.remove("active");
+        button.setAttribute("aria-pressed", "false");
+      });
+
+      document.getElementById("rangeDescription").innerText =
+        `Custom range: ${formatTime(from)} - ${formatTime(to)}`;
 
       refreshDashboard();
     }
@@ -239,52 +585,94 @@
       return new Date(timestamp).toLocaleString();
     }
 
+    function formatAge(timestamp) {
+      const ageSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+
+      if (ageSeconds < 10) {
+        return "Just now";
+      }
+
+      if (ageSeconds < 60) {
+        return `${ageSeconds} seconds ago`;
+      }
+
+      const ageMinutes = Math.floor(ageSeconds / 60);
+
+      if (ageMinutes < 60) {
+        return `${ageMinutes} minute${ageMinutes === 1 ? "" : "s"} ago`;
+      }
+
+      const ageHours = Math.floor(ageMinutes / 60);
+      return `${ageHours} hour${ageHours === 1 ? "" : "s"} ago`;
+    }
+
+    function setStatus(state, label, detail) {
+      const statusIndicator = document.getElementById("statusIndicator");
+      statusIndicator.className = `status-pill ${state}`;
+      document.getElementById("connectivityStatus").innerText = label;
+      document.getElementById("statusDetail").innerText = detail;
+    }
+
+    function renderLatestStatus(receivedAt) {
+      const receivedTime = new Date(receivedAt);
+      const timestamp = receivedTime.getTime();
+
+      if (Number.isNaN(timestamp)) {
+        setStatus("unavailable", "No recent data", "Latest reading has an invalid timestamp.");
+        return;
+      }
+
+      const age = Date.now() - timestamp;
+      const ageLabel = formatAge(timestamp);
+
+      document.getElementById("updated").innerText = ageLabel;
+      document.getElementById("updatedDetail").innerText = formatTime(timestamp);
+
+      if (age <= RECENT_DATA_THRESHOLD_MS) {
+        setStatus("online", "Online", `Latest sensor reading received ${ageLabel.toLowerCase()}.`);
+        return;
+      }
+
+      setStatus("stale", "No recent data", `Last sensor reading received ${ageLabel.toLowerCase()}.`);
+    }
+
     async function renderCurrentValues() {
       try {
         const data = await loadWeatherData();
 
         document.getElementById("temperature").innerText =
-          `${data.temperatureCelsius} °C`;
-
+          `${data.temperatureCelsius} \u00b0C`;
         document.getElementById("pressure").innerText =
           `${data.pressureHpa} hPa`;
-
         document.getElementById("light").innerText =
           `${data.lightLevelLux} lux`;
-
         document.getElementById("wifi").innerText =
           `${data.wifiRssiDbm} dBm`;
 
-        document.getElementById("updated").innerText =
-          `Updated: ${formatTime(data.receivedAt)}`;
+        renderLatestStatus(data.receivedAt);
       } catch (error) {
         console.error("Failed to load latest weather data:", error);
-
-        document.getElementById("updated").innerText =
-          "Latest weather data currently unavailable.";
+        setStatus("unavailable", "No recent data", "Latest weather data currently unavailable.");
+        document.getElementById("updatedDetail").innerText = "Unable to retrieve latest reading";
       }
     }
 
     async function renderCharts() {
       try {
         const history = await loadWeatherHistory();
-        const reversedHistory = [...history].reverse();
-
-        const labels = reversedHistory.map((entry) =>
-          formatTime(entry.receivedAt)
+        const chronologicalHistory = [...history].sort(
+          (first, second) => new Date(first.receivedAt) - new Date(second.receivedAt)
         );
 
-        const temperaturePoints = reversedHistory.map((entry) => ({
+        const temperaturePoints = chronologicalHistory.map((entry) => ({
           x: new Date(entry.receivedAt).getTime(),
           y: entry.temperatureCelsius,
         }));
-
-        const pressurePoints = reversedHistory.map((entry) => ({
+        const pressurePoints = chronologicalHistory.map((entry) => ({
           x: new Date(entry.receivedAt).getTime(),
           y: entry.pressureHpa,
         }));
-
-        const lightPoints = reversedHistory.map((entry) => ({
+        const lightPoints = chronologicalHistory.map((entry) => ({
           x: new Date(entry.receivedAt).getTime(),
           y: entry.lightLevelLux,
         }));
@@ -297,10 +685,49 @@
       }
     }
 
+    function chartOptions() {
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        parsing: false,
+        interaction: {
+          intersect: false,
+          mode: "index",
+        },
+        plugins: {
+          legend: {
+            display: false,
+          },
+        },
+        scales: {
+          x: {
+            type: "time",
+            time: {
+              tooltipFormat: "dd.MM.yyyy HH:mm:ss",
+            },
+            grid: {
+              color: "rgba(148, 163, 184, 0.08)",
+            },
+            ticks: {
+              color: "#8da2be",
+              maxTicksLimit: 8,
+            },
+          },
+          y: {
+            grid: {
+              color: "rgba(148, 163, 184, 0.08)",
+            },
+            ticks: {
+              color: "#8da2be",
+            },
+          },
+        },
+      };
+    }
+
     function renderTemperatureChart(temperaturePoints) {
-      const context = document
-        .getElementById("temperatureChart")
-        .getContext("2d");
+      const context = document.getElementById("temperatureChart").getContext("2d");
 
       if (temperatureChart) {
         temperatureChart.data.datasets[0].data = temperaturePoints;
@@ -311,35 +738,24 @@
       temperatureChart = new Chart(context, {
         type: "line",
         data: {
-          datasets: [
-            {
-              label: "Temperature °C",
-              data: temperaturePoints,
-              borderWidth: 2,
-              tension: 0.2,
-            },
-          ],
+          datasets: [{
+            label: "Temperature \u00b0C",
+            data: temperaturePoints,
+            borderColor: "#38bdf8",
+            backgroundColor: "rgba(56, 189, 248, 0.12)",
+            borderWidth: 2,
+            fill: true,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            tension: 0.24,
+          }],
         },
-        options: {
-          responsive: true,
-          animation: false,
-          parsing: false,
-          scales: {
-            x: {
-              type: "time",
-              time: {
-                tooltipFormat: "dd.MM.yyyy HH:mm:ss",
-              },
-            },
-          },
-        },
+        options: chartOptions(),
       });
     }
 
     function renderPressureChart(pressurePoints) {
-      const context = document
-        .getElementById("pressureChart")
-        .getContext("2d");
+      const context = document.getElementById("pressureChart").getContext("2d");
 
       if (pressureChart) {
         pressureChart.data.datasets[0].data = pressurePoints;
@@ -350,35 +766,24 @@
       pressureChart = new Chart(context, {
         type: "line",
         data: {
-          datasets: [
-            {
-              label: "Pressure hPa",
-              data: pressurePoints,
-              borderWidth: 2,
-              tension: 0.2,
-            },
-          ],
+          datasets: [{
+            label: "Pressure hPa",
+            data: pressurePoints,
+            borderColor: "#a78bfa",
+            backgroundColor: "rgba(167, 139, 250, 0.11)",
+            borderWidth: 2,
+            fill: true,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            tension: 0.24,
+          }],
         },
-        options: {
-          responsive: true,
-          animation: false,
-          parsing: false,
-          scales: {
-            x: {
-              type: "time",
-              time: {
-                tooltipFormat: "dd.MM.yyyy HH:mm:ss",
-              },
-            },
-          },
-        },
+        options: chartOptions(),
       });
     }
 
     function renderLightChart(lightPoints) {
-      const context = document
-        .getElementById("lightChart")
-        .getContext("2d");
+      const context = document.getElementById("lightChart").getContext("2d");
 
       if (lightChart) {
         lightChart.data.datasets[0].data = lightPoints;
@@ -389,28 +794,19 @@
       lightChart = new Chart(context, {
         type: "line",
         data: {
-          datasets: [
-            {
-              label: "Light level lux",
-              data: lightPoints,
-              borderWidth: 2,
-              tension: 0.2,
-            },
-          ],
+          datasets: [{
+            label: "Light level lux",
+            data: lightPoints,
+            borderColor: "#fbbf24",
+            backgroundColor: "rgba(251, 191, 36, 0.1)",
+            borderWidth: 2,
+            fill: true,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            tension: 0.24,
+          }],
         },
-        options: {
-          responsive: true,
-          animation: false,
-          parsing: false,
-          scales: {
-            x: {
-              type: "time",
-              time: {
-                tooltipFormat: "dd.MM.yyyy HH:mm:ss",
-              },
-            },
-          },
-        },
+        options: chartOptions(),
       });
     }
 
@@ -427,6 +823,5 @@
       refreshDashboard();
     }, 5000);
   </script>
-
 </body>
 </html>
