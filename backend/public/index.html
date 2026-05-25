@@ -129,8 +129,9 @@
     }
 
     .firmware-detail {
-      margin-top: 7px;
-      font-size: 0.78rem;
+      margin-top: 8px;
+      font-size: 0.74rem;
+      opacity: 0.72;
     }
 
     .health-detail {
@@ -139,11 +140,30 @@
       border-top: 1px solid var(--border);
       color: var(--muted);
       font-size: 0.76rem;
-      line-height: 1.7;
+      line-height: 1.45;
+      display: grid;
+      gap: 7px;
     }
 
-    .health-detail span {
-      display: block;
+    .health-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .health-value {
+      color: var(--text);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .health-value.healthy {
+      color: var(--success);
+    }
+
+    .health-value.warning {
+      color: var(--warning);
     }
 
     .summary-grid {
@@ -463,7 +483,7 @@
         <p class="connection-detail" id="statusDetail">Waiting for sensor data...</p>
         <p class="connection-detail firmware-detail" id="firmwareVersion">Firmware: unknown</p>
         <div class="health-detail" id="deviceHealth">
-          <span>Device health: waiting for data</span>
+          <div>Device health: waiting for data</div>
         </div>
       </div>
     </header>
@@ -577,6 +597,7 @@
     let selectedFrom = null;
     let selectedTo = null;
     const MIN_RANGE_STEP_MS = 1000;
+    const HEALTH_WINDOW_HOURS = 8;
 
     async function loadWeatherData() {
       const response = await fetch("/weather/latest");
@@ -611,6 +632,24 @@
 
       if (!response.ok) {
         throw new Error(`Weather history request failed: ${response.status}`);
+      }
+
+      return await response.json();
+    }
+
+    async function loadRecentHealthHistory() {
+      const to = new Date();
+      const from = new Date(
+        to.getTime() - HEALTH_WINDOW_HOURS * 60 * 60 * 1000
+      );
+      const params = new URLSearchParams({
+        from: from.toISOString(),
+        to: to.toISOString(),
+      });
+      const response = await fetch(`/weather/history?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Recent health history request failed: ${response.status}`);
       }
 
       return await response.json();
@@ -776,11 +815,59 @@
       return `${totalSeconds}s`;
     }
 
-    function renderDeviceHealth(data) {
+    function calculateRecentUploadFailures(history) {
+      const entries = history.filter((entry) =>
+        typeof entry.uploadFailureCount === "number"
+      );
+
+      if (entries.length === 0) {
+        return null;
+      }
+
+      const windowStart = Date.now() - HEALTH_WINDOW_HOURS * 60 * 60 * 1000;
+      let failures = 0;
+      let previousCount = null;
+
+      entries.forEach((entry) => {
+        const currentCount = Math.max(0, Math.floor(entry.uploadFailureCount));
+
+        if (previousCount === null) {
+          const readingTime = new Date(entry.receivedAt).getTime();
+          const uptimeMilliseconds = entry.uptimeSeconds * 1000;
+          const bootTime = readingTime - uptimeMilliseconds;
+
+          if (
+            typeof entry.uptimeSeconds === "number" &&
+            Number.isFinite(bootTime) &&
+            bootTime >= windowStart
+          ) {
+            failures += currentCount;
+          }
+        } else if (currentCount >= previousCount) {
+          failures += currentCount - previousCount;
+        } else {
+          failures += currentCount;
+        }
+
+        previousCount = currentCount;
+      });
+
+      return failures;
+    }
+
+    function healthTone(value) {
+      if (typeof value !== "number") {
+        return "";
+      }
+
+      return value === 0 ? "healthy" : "warning";
+    }
+
+    function renderDeviceHealth(data, recentUploadFailures) {
       const healthElement = document.getElementById("deviceHealth");
 
       if (data.uptimeSeconds === null || data.uptimeSeconds === undefined) {
-        healthElement.innerHTML = "<span>Device health telemetry unavailable</span>";
+        healthElement.innerHTML = "<div>Device health telemetry unavailable</div>";
         return;
       }
 
@@ -788,16 +875,18 @@
         ? `${(data.freeHeapBytes / 1024).toFixed(1)} KB`
         : "unknown";
       const reconnects = data.wifiReconnectCount ?? "unknown";
-      const failures = data.uploadFailureCount ?? "unknown";
+      const failures = recentUploadFailures ?? "unknown";
       const uploadAge = data.lastSuccessfulUploadSecondsAgo === null ||
         data.lastSuccessfulUploadSecondsAgo === undefined
         ? "not yet reported"
-        : `${formatDuration(data.lastSuccessfulUploadSecondsAgo)} before reading`;
+        : formatDuration(data.lastSuccessfulUploadSecondsAgo);
 
       healthElement.innerHTML = `
-        <span>Uptime: ${formatDuration(data.uptimeSeconds)} | Free heap: ${freeHeapKilobytes}</span>
-        <span>WiFi reconnects: ${reconnects} | Upload failures: ${failures}</span>
-        <span>Last successful upload: ${uploadAge}</span>
+        <div class="health-row"><span>Uptime</span><span class="health-value">${formatDuration(data.uptimeSeconds)}</span></div>
+        <div class="health-row"><span>Free heap</span><span class="health-value">${freeHeapKilobytes}</span></div>
+        <div class="health-row"><span>WiFi reconnects</span><span class="health-value ${healthTone(data.wifiReconnectCount)}">${reconnects}</span></div>
+        <div class="health-row"><span>Upload failures (last 8h)</span><span class="health-value ${healthTone(recentUploadFailures)}">${failures}</span></div>
+        <div class="health-row"><span>Last upload gap</span><span class="health-value">${uploadAge}</span></div>
       `;
     }
 
@@ -833,7 +922,16 @@
 
     async function renderCurrentValues() {
       try {
-        const data = await loadWeatherData();
+        const recentFailuresPromise = loadRecentHealthHistory()
+          .then(calculateRecentUploadFailures)
+          .catch((error) => {
+            console.error("Failed to load recent device health history:", error);
+            return null;
+          });
+        const [data, recentUploadFailures] = await Promise.all([
+          loadWeatherData(),
+          recentFailuresPromise,
+        ]);
 
         document.getElementById("temperature").innerText =
           `${data.temperatureCelsius} \u00b0C`;
@@ -846,14 +944,14 @@
         document.getElementById("firmwareVersion").innerText =
           `Firmware: ${data.firmwareVersion || "unknown"}`;
 
-        renderDeviceHealth(data);
+        renderDeviceHealth(data, recentUploadFailures);
         renderLatestStatus(data.receivedAt);
       } catch (error) {
         console.error("Failed to load latest weather data:", error);
         setStatus("unavailable", "No recent data", "Latest weather data currently unavailable.");
         document.getElementById("updatedDetail").innerText = "Unable to retrieve latest reading";
         document.getElementById("deviceHealth").innerHTML =
-          "<span>Device health telemetry unavailable</span>";
+          "<div>Device health telemetry unavailable</div>";
       }
     }
 
