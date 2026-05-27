@@ -152,6 +152,20 @@ function mapDeviceLogRow(row) {
   };
 }
 
+function mapDeviceStatusRow(row) {
+  return {
+    firmwareVersion: row.latest_firmware_version,
+    latestEvent: row.event,
+    latestLogLevel: row.level,
+    latestMessage: row.message,
+    latestLogTimestamp: row.received_at,
+    latestSensorEvent: row.latest_sensor_event,
+    latestSensorMessage: row.latest_sensor_message,
+    latestSensorTimestamp: row.latest_sensor_timestamp,
+    uptimeSeconds: row.uptime_seconds,
+  };
+}
+
 app.post("/weather", (req, res) => {
   const validationErrors = validateWeatherMeasurement(req.body);
 
@@ -450,6 +464,68 @@ app.get("/device/logs", (req, res) => {
     }
 
     res.status(200).json(rows.map(mapDeviceLogRow));
+  });
+});
+
+app.get("/device/status", (req, res) => {
+  const query = `
+    SELECT
+      level,
+      event,
+      message,
+      uptime_seconds,
+      received_at,
+      (
+        SELECT firmware_version
+        FROM device_logs
+        WHERE firmware_version IS NOT NULL AND firmware_version <> ''
+        ORDER BY received_at DESC, id DESC
+        LIMIT 1
+      ) AS latest_firmware_version,
+      (
+        SELECT event
+        FROM device_logs
+        WHERE event IN ('sensor_init_success', 'sensor_init_failed')
+        ORDER BY received_at DESC, id DESC
+        LIMIT 1
+      ) AS latest_sensor_event,
+      (
+        SELECT message
+        FROM device_logs
+        WHERE event IN ('sensor_init_success', 'sensor_init_failed')
+        ORDER BY received_at DESC, id DESC
+        LIMIT 1
+      ) AS latest_sensor_message,
+      (
+        SELECT received_at
+        FROM device_logs
+        WHERE event IN ('sensor_init_success', 'sensor_init_failed')
+        ORDER BY received_at DESC, id DESC
+        LIMIT 1
+      ) AS latest_sensor_timestamp
+    FROM device_logs
+    ORDER BY received_at DESC, id DESC
+    LIMIT 1
+  `;
+
+  db.get(query, [], (error, row) => {
+    if (error) {
+      console.error("Failed to load device status:", error.message);
+
+      return res.status(500).json({
+        status: "error",
+        message: "Failed to load device status",
+      });
+    }
+
+    if (!row) {
+      return res.status(404).json({
+        status: "error",
+        message: "No device status received yet",
+      });
+    }
+
+    res.status(200).json(mapDeviceStatusRow(row));
   });
 });
 

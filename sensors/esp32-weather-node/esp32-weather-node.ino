@@ -15,13 +15,14 @@ const int SCL_PIN = 22;
 const unsigned long MEASUREMENT_INTERVAL_MS = 5000;
 const unsigned long WIFI_RECONNECT_INTERVAL_MS = 10000;
 const unsigned long SENSOR_RETRY_INTERVAL_MS = 30000;
+const unsigned long I2C_FAILURE_SCAN_INTERVAL_MS = 5UL * 60UL * 1000UL;
 const unsigned long UPLOAD_RECOVERY_TIMEOUT_MS = 10UL * 60UL * 1000UL;
 const unsigned long UPLOAD_FAILURE_LOG_INTERVAL_MS = 60UL * 1000UL;
 const uint16_t HTTP_TIMEOUT_MS = 4000;
 const uint16_t DEVICE_LOG_HTTP_TIMEOUT_MS = 750;
 const uint8_t PRIMARY_SENSOR_ADDRESS = 0x76;
 const uint8_t SECONDARY_SENSOR_ADDRESS = 0x77;
-const char* FIRMWARE_VERSION = "0.2.2-device-logs";
+const char* FIRMWARE_VERSION = "0.2.3-i2c-diagnostics";
 
 enum LedSignal {
   LED_IDLE,
@@ -35,6 +36,7 @@ unsigned long ledSignalStartedAt = 0;
 unsigned long lastMeasurementAt = 0;
 unsigned long lastWiFiAttemptAt = 0;
 unsigned long lastSensorInitializationAttemptAt = 0;
+unsigned long lastI2cScanAt = 0;
 unsigned long lastSuccessfulUploadAt = 0;
 unsigned long lastUploadFailureLogAt = 0;
 unsigned long wifiReconnectCount = 0;
@@ -47,7 +49,10 @@ bool hasReportedBoot = false;
 bool wifiWasConnected = false;
 bool otaStarted = false;
 bool bmeReady = false;
+bool hasCompletedI2cScan = false;
+bool hasPendingI2cScanLog = false;
 uint8_t bmeAddress = 0;
+String latestI2cScanMessage;
 
 void setLedSignal(LedSignal signal) {
   ledSignal = signal;
@@ -130,6 +135,53 @@ void sendDeviceLog(const char* level, const char* event, const String& message =
   http.addHeader("Content-Type", "application/json");
   http.POST(payload);
   http.end();
+}
+
+void scanI2cBus() {
+  String detectedAddresses;
+
+  for (uint8_t address = 1; address <= 126; address++) {
+    Wire.beginTransmission(address);
+    uint8_t transmissionResult = Wire.endTransmission();
+
+    if (transmissionResult == 0) {
+      if (detectedAddresses.length() > 0) {
+        detectedAddresses += ", ";
+      }
+
+      String addressHex = String(address, HEX);
+      addressHex.toUpperCase();
+      detectedAddresses += "0x";
+      detectedAddresses += addressHex;
+    }
+  }
+
+  if (detectedAddresses.length() > 0) {
+    latestI2cScanMessage = String("Detected I2C devices: ") + detectedAddresses;
+  } else {
+    latestI2cScanMessage = "No I2C devices detected";
+  }
+
+  lastI2cScanAt = millis();
+  hasCompletedI2cScan = true;
+
+  Serial.print("{\"status\":\"i2c_scan_result\",\"message\":\"");
+  Serial.print(latestI2cScanMessage);
+  Serial.println("\"}");
+
+  if (WiFi.status() == WL_CONNECTED) {
+    sendDeviceLog("info", "i2c_scan_result", latestI2cScanMessage);
+    hasPendingI2cScanLog = false;
+  } else {
+    hasPendingI2cScanLog = true;
+  }
+}
+
+void sendPendingI2cScanResult() {
+  if (hasPendingI2cScanLog && WiFi.status() == WL_CONNECTED) {
+    sendDeviceLog("info", "i2c_scan_result", latestI2cScanMessage);
+    hasPendingI2cScanLog = false;
+  }
 }
 
 void reportSensorState() {
@@ -260,6 +312,7 @@ void serviceConnectivity() {
       hasReportedBoot = true;
     }
 
+    sendPendingI2cScanResult();
     reportSensorState();
 
     if (!otaStarted) {
@@ -301,9 +354,16 @@ bool initializeBme280() {
 
   bmeAddress = 0;
   Serial.println(
-    "{\"status\":\"sensor_error\",\"sensor\":\"BME280\",\"message\":\"initialization failed at I2C addresses 0x76 and 0x77\","
-    "\"hint\":\"check SDA GPIO21, SCL GPIO22, CSB HIGH for I2C, and SDO address selection\"}"
+    "{\"status\":\"sensor_error\",\"sensor\":\"BME280\",\"message\":\"BME280 initialization failed at I2C addresses 0x76 and 0x77\"}"
   );
+
+  if (
+    !hasCompletedI2cScan ||
+    millis() - lastI2cScanAt >= I2C_FAILURE_SCAN_INTERVAL_MS
+  ) {
+    scanI2cBus();
+  }
+
   return false;
 }
 
@@ -459,9 +519,13 @@ void setup() {
   beginWiFiConnection(false);
 
   Wire.begin(SDA_PIN, SCL_PIN);
-  lightMeter.begin();
-
   bmeReady = initializeBme280();
+
+  if (!hasCompletedI2cScan) {
+    scanI2cBus();
+  }
+
+  lightMeter.begin();
   lastMeasurementAt = millis() - MEASUREMENT_INTERVAL_MS;
 }
 

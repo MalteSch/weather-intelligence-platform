@@ -834,7 +834,8 @@
           <span id="connectivityStatus">Connecting</span>
         </span>
         <p class="connection-detail" id="statusDetail">Waiting for sensor data...</p>
-        <p class="connection-detail firmware-detail" id="firmwareVersion">Firmware: unknown</p>
+        <p class="connection-detail firmware-detail" id="firmwareVersion">ESP firmware: unknown</p>
+        <p class="connection-detail firmware-detail" id="weatherFirmwareVersion" hidden></p>
         <div class="health-detail" id="deviceHealth">
           <div>Device health: waiting for data</div>
         </div>
@@ -1163,6 +1164,16 @@
 
       if (!response.ok) {
         throw new Error(`Device log request failed: ${response.status}`);
+      }
+
+      return await response.json();
+    }
+
+    async function loadDeviceStatus() {
+      const response = await fetch("/device/status");
+
+      if (!response.ok) {
+        throw new Error(`Device status request failed: ${response.status}`);
       }
 
       return await response.json();
@@ -1531,7 +1542,73 @@
       setStatus("stale", "Offline / stale", `Last sensor reading received ${ageLabel.toLowerCase()}.`);
     }
 
+    function renderReportedDeviceStatus(deviceStatus, weatherData) {
+      const firmwareElement = document.getElementById("firmwareVersion");
+      const weatherFirmwareElement = document.getElementById("weatherFirmwareVersion");
+      const weatherFirmware = weatherData && weatherData.firmwareVersion;
+
+      firmwareElement.innerText = deviceStatus && deviceStatus.firmwareVersion
+        ? `ESP firmware: ${deviceStatus.firmwareVersion} (device logs)`
+        : "ESP firmware: unknown (no current device status)";
+
+      const weatherTimestamp = weatherData
+        ? new Date(weatherData.receivedAt).getTime()
+        : NaN;
+      const weatherIsStale = Number.isNaN(weatherTimestamp) ||
+        Date.now() - weatherTimestamp > RECENT_DATA_THRESHOLD_MS;
+      const shouldShowWeatherFirmware = Boolean(weatherFirmware) && (
+        weatherIsStale ||
+        !deviceStatus ||
+        weatherFirmware !== deviceStatus.firmwareVersion
+      );
+
+      weatherFirmwareElement.hidden = !shouldShowWeatherFirmware;
+      weatherFirmwareElement.innerText = shouldShowWeatherFirmware
+        ? `Latest weather firmware: ${weatherFirmware} (stored measurement)`
+        : "";
+
+      if (!deviceStatus) {
+        return;
+      }
+
+      const logTimestamp = new Date(deviceStatus.latestLogTimestamp).getTime();
+
+      if (
+        Number.isNaN(logTimestamp) ||
+        Date.now() - logTimestamp > RECENT_DATA_THRESHOLD_MS
+      ) {
+        return;
+      }
+
+      const eventLabel = deviceStatus.latestEvent || "device_log";
+      const logAge = formatAge(logTimestamp).toLowerCase();
+
+      if (weatherIsStale) {
+        const sensorFailureReported = deviceStatus.latestSensorEvent === "sensor_init_failed";
+
+        setStatus(
+          "stale",
+          sensorFailureReported ? "Device online / sensor failing" : "Device online / weather stale",
+          sensorFailureReported
+            ? `Device logged ${eventLabel} ${logAge}; BME280 initialization is failing.`
+            : `Device logged ${eventLabel} ${logAge}; weather sensor data is stale.`
+        );
+        return;
+      }
+
+      setStatus(
+        "online",
+        "Online",
+        `Device logged ${eventLabel} ${logAge}; weather readings are current.`
+      );
+    }
+
     async function renderCurrentValues() {
+      const deviceStatusPromise = loadDeviceStatus().catch((error) => {
+        console.error("Failed to load device status:", error);
+        return null;
+      });
+
       try {
         const recentFailuresPromise = loadRecentHealthHistory()
           .then(calculateRecentUploadFailures)
@@ -1539,9 +1616,10 @@
             console.error("Failed to load recent device health history:", error);
             return null;
           });
-        const [data, recentUploadFailures] = await Promise.all([
+        const [data, recentUploadFailures, deviceStatus] = await Promise.all([
           loadWeatherData(),
           recentFailuresPromise,
+          deviceStatusPromise,
         ]);
 
         document.getElementById("temperature").innerText =
@@ -1556,17 +1634,18 @@
           `${data.lightLevelLux} lux`;
         document.getElementById("wifi").innerText =
           `${data.wifiRssiDbm} dBm`;
-        document.getElementById("firmwareVersion").innerText =
-          `Firmware: ${data.firmwareVersion || "unknown"}`;
-
         renderDeviceHealth(data, recentUploadFailures);
         renderLatestStatus(data.receivedAt);
+        renderReportedDeviceStatus(deviceStatus, data);
       } catch (error) {
         console.error("Failed to load latest weather data:", error);
-        setStatus("unavailable", "No recent data", "Latest weather data currently unavailable.");
+        const deviceStatus = await deviceStatusPromise;
+
+        setStatus("unavailable", "No weather data", "Latest weather data currently unavailable.");
         document.getElementById("updatedDetail").innerText = "Unable to retrieve latest reading";
         document.getElementById("deviceHealth").innerHTML =
           "<div>Device health telemetry unavailable</div>";
+        renderReportedDeviceStatus(deviceStatus, null);
       }
     }
 
