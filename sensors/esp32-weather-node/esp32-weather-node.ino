@@ -19,8 +19,9 @@ const unsigned long UPLOAD_RECOVERY_TIMEOUT_MS = 10UL * 60UL * 1000UL;
 const unsigned long UPLOAD_FAILURE_LOG_INTERVAL_MS = 60UL * 1000UL;
 const uint16_t HTTP_TIMEOUT_MS = 4000;
 const uint16_t DEVICE_LOG_HTTP_TIMEOUT_MS = 750;
-const uint8_t SENSOR_ADDRESS = 0x76;
-const char* FIRMWARE_VERSION = "0.2.1-device-logs";
+const uint8_t PRIMARY_SENSOR_ADDRESS = 0x76;
+const uint8_t SECONDARY_SENSOR_ADDRESS = 0x77;
+const char* FIRMWARE_VERSION = "0.2.2-device-logs";
 
 enum LedSignal {
   LED_IDLE,
@@ -46,6 +47,7 @@ bool hasReportedBoot = false;
 bool wifiWasConnected = false;
 bool otaStarted = false;
 bool bmeReady = false;
+uint8_t bmeAddress = 0;
 
 void setLedSignal(LedSignal signal) {
   ledSignal = signal;
@@ -139,9 +141,18 @@ void reportSensorState() {
   }
 
   if (bmeReady) {
-    sendDeviceLog("info", "sensor_init_success", "BME280 initialized at I2C address 0x76");
+    sendDeviceLog(
+      "info",
+      "sensor_init_success",
+      String("BME280 initialized at I2C address ") +
+        (bmeAddress == PRIMARY_SENSOR_ADDRESS ? "0x76" : "0x77")
+    );
   } else {
-    sendDeviceLog("error", "sensor_init_failed", "BME280 initialization failed at I2C address 0x76");
+    sendDeviceLog(
+      "error",
+      "sensor_init_failed",
+      "BME280 initialization failed at I2C addresses 0x76 and 0x77"
+    );
   }
 
   hasReportedSensorState = true;
@@ -276,16 +287,24 @@ void serviceOta() {
 bool initializeBme280() {
   lastSensorInitializationAttemptAt = millis();
 
-  if (!bme.begin(SENSOR_ADDRESS)) {
-    Serial.println(
-      "{\"status\":\"sensor_error\",\"sensor\":\"BME280\",\"message\":\"initialization failed at I2C address 0x76\","
-      "\"hint\":\"check SDA GPIO21, SCL GPIO22, CSB HIGH for I2C, and SDO address selection\"}"
-    );
-    return false;
+  if (bme.begin(PRIMARY_SENSOR_ADDRESS)) {
+    bmeAddress = PRIMARY_SENSOR_ADDRESS;
+    Serial.println("{\"status\":\"ok\",\"message\":\"BME280 initialized at I2C address 0x76\"}");
+    return true;
   }
 
-  Serial.println("{\"status\":\"ok\",\"message\":\"BME280 initialized at I2C address 0x76\"}");
-  return true;
+  if (bme.begin(SECONDARY_SENSOR_ADDRESS)) {
+    bmeAddress = SECONDARY_SENSOR_ADDRESS;
+    Serial.println("{\"status\":\"ok\",\"message\":\"BME280 initialized at I2C address 0x77\"}");
+    return true;
+  }
+
+  bmeAddress = 0;
+  Serial.println(
+    "{\"status\":\"sensor_error\",\"sensor\":\"BME280\",\"message\":\"initialization failed at I2C addresses 0x76 and 0x77\","
+    "\"hint\":\"check SDA GPIO21, SCL GPIO22, CSB HIGH for I2C, and SDO address selection\"}"
+  );
+  return false;
 }
 
 String buildWeatherPayload(
