@@ -16,9 +16,11 @@ const unsigned long MEASUREMENT_INTERVAL_MS = 5000;
 const unsigned long WIFI_RECONNECT_INTERVAL_MS = 10000;
 const unsigned long SENSOR_RETRY_INTERVAL_MS = 30000;
 const unsigned long UPLOAD_RECOVERY_TIMEOUT_MS = 10UL * 60UL * 1000UL;
+const unsigned long UPLOAD_FAILURE_LOG_INTERVAL_MS = 60UL * 1000UL;
 const uint16_t HTTP_TIMEOUT_MS = 4000;
+const uint16_t DEVICE_LOG_HTTP_TIMEOUT_MS = 750;
 const uint8_t SENSOR_ADDRESS = 0x76;
-const char* FIRMWARE_VERSION = "0.2.0-bme280";
+const char* FIRMWARE_VERSION = "0.2.1-device-logs";
 
 enum LedSignal {
   LED_IDLE,
@@ -33,9 +35,14 @@ unsigned long lastMeasurementAt = 0;
 unsigned long lastWiFiAttemptAt = 0;
 unsigned long lastSensorInitializationAttemptAt = 0;
 unsigned long lastSuccessfulUploadAt = 0;
+unsigned long lastUploadFailureLogAt = 0;
 unsigned long wifiReconnectCount = 0;
 unsigned long uploadFailureCount = 0;
 bool hasSuccessfulUpload = false;
+bool hasReportedUploadFailure = false;
+bool hasReportedSensorState = false;
+bool reportedSensorReady = false;
+bool hasReportedBoot = false;
 bool wifiWasConnected = false;
 bool otaStarted = false;
 bool bmeReady = false;
@@ -73,6 +80,74 @@ void serviceStatusLed() {
   digitalWrite(STATUS_LED_PIN, ledOn ? HIGH : LOW);
 }
 
+String escapeJsonString(String value) {
+  value.replace("\\", "\\\\");
+  value.replace("\"", "\\\"");
+  value.replace("\r", "\\r");
+  value.replace("\n", "\\n");
+  return value;
+}
+
+String deviceLogsUrl() {
+  String url = API_URL;
+  const String weatherPath = "/weather";
+
+  while (url.endsWith("/")) {
+    url.remove(url.length() - 1);
+  }
+
+  if (url.endsWith(weatherPath)) {
+    url.remove(url.length() - weatherPath.length());
+  }
+
+  url += "/device/logs";
+  return url;
+}
+
+void sendDeviceLog(const char* level, const char* event, const String& message = "") {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  String payload = "{";
+  payload += "\"level\":\"";
+  payload += escapeJsonString(String(level));
+  payload += "\",\"event\":\"";
+  payload += escapeJsonString(String(event));
+  payload += "\",\"message\":\"";
+  payload += escapeJsonString(message);
+  payload += "\",\"firmwareVersion\":\"";
+  payload += escapeJsonString(String(FIRMWARE_VERSION));
+  payload += "\",\"uptimeSeconds\":";
+  payload += String(millis() / 1000);
+  payload += "}";
+
+  HTTPClient http;
+  http.setTimeout(DEVICE_LOG_HTTP_TIMEOUT_MS);
+  http.begin(deviceLogsUrl());
+  http.addHeader("Content-Type", "application/json");
+  http.POST(payload);
+  http.end();
+}
+
+void reportSensorState() {
+  if (
+    WiFi.status() != WL_CONNECTED ||
+    (hasReportedSensorState && reportedSensorReady == bmeReady)
+  ) {
+    return;
+  }
+
+  if (bmeReady) {
+    sendDeviceLog("info", "sensor_init_success", "BME280 initialized at I2C address 0x76");
+  } else {
+    sendDeviceLog("error", "sensor_init_failed", "BME280 initialization failed at I2C address 0x76");
+  }
+
+  hasReportedSensorState = true;
+  reportedSensorReady = bmeReady;
+}
+
 void beginWiFiConnection(bool reconnect) {
   if (reconnect) {
     wifiReconnectCount++;
@@ -91,6 +166,23 @@ void beginWiFiConnection(bool reconnect) {
   setLedSignal(LED_WIFI_DISCONNECTED);
 }
 
+const char* otaErrorMessage(ota_error_t error) {
+  switch (error) {
+    case OTA_AUTH_ERROR:
+      return "authentication failed";
+    case OTA_BEGIN_ERROR:
+      return "begin failed";
+    case OTA_CONNECT_ERROR:
+      return "connect failed";
+    case OTA_RECEIVE_ERROR:
+      return "receive failed";
+    case OTA_END_ERROR:
+      return "end failed";
+    default:
+      return "unknown error";
+  }
+}
+
 void setupOta() {
   ArduinoOTA.setHostname(OTA_HOSTNAME);
   ArduinoOTA.setPassword(OTA_PASSWORD);
@@ -99,6 +191,11 @@ void setupOta() {
     Serial.print("{\"status\":\"ota_start\",\"type\":\"");
     Serial.print(ArduinoOTA.getCommand() == U_FLASH ? "firmware" : "filesystem");
     Serial.println("\"}");
+    sendDeviceLog(
+      "info",
+      "ota_start",
+      ArduinoOTA.getCommand() == U_FLASH ? "Firmware update started" : "Filesystem update started"
+    );
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -109,35 +206,16 @@ void setupOta() {
 
   ArduinoOTA.onEnd([]() {
     Serial.println("{\"status\":\"ota_success\"}");
+    sendDeviceLog("info", "ota_success", "OTA update completed");
   });
 
   ArduinoOTA.onError([](ota_error_t error) {
     Serial.print("{\"status\":\"ota_error\",\"code\":");
     Serial.print(error);
     Serial.print(",\"message\":\"");
-
-    switch (error) {
-      case OTA_AUTH_ERROR:
-        Serial.print("authentication failed");
-        break;
-      case OTA_BEGIN_ERROR:
-        Serial.print("begin failed");
-        break;
-      case OTA_CONNECT_ERROR:
-        Serial.print("connect failed");
-        break;
-      case OTA_RECEIVE_ERROR:
-        Serial.print("receive failed");
-        break;
-      case OTA_END_ERROR:
-        Serial.print("end failed");
-        break;
-      default:
-        Serial.print("unknown error");
-        break;
-    }
-
+    Serial.print(otaErrorMessage(error));
     Serial.println("\"}");
+    sendDeviceLog("error", "ota_error", otaErrorMessage(error));
   });
 
   ArduinoOTA.begin();
@@ -146,6 +224,7 @@ void setupOta() {
   Serial.print("{\"status\":\"ota_ready\",\"hostname\":\"");
   Serial.print(OTA_HOSTNAME);
   Serial.println("\"}");
+  sendDeviceLog("info", "ota_ready", String("OTA ready at hostname ") + OTA_HOSTNAME);
 }
 
 void serviceConnectivity() {
@@ -159,6 +238,18 @@ void serviceConnectivity() {
     Serial.print("\",\"rssiDbm\":");
     Serial.print(WiFi.RSSI());
     Serial.println("}");
+    sendDeviceLog(
+      "info",
+      "wifi_connected",
+      String("IP ") + WiFi.localIP().toString() + ", RSSI " + String(WiFi.RSSI()) + " dBm"
+    );
+
+    if (!hasReportedBoot) {
+      sendDeviceLog("info", "boot", String("Firmware ") + FIRMWARE_VERSION + " booted");
+      hasReportedBoot = true;
+    }
+
+    reportSensorState();
 
     if (!otaStarted) {
       setupOta();
@@ -274,9 +365,11 @@ void sendWeatherPayload(const String& payload) {
 
   int httpResponseCode = http.POST(payload);
   bool uploadSucceeded = httpResponseCode >= 200 && httpResponseCode < 300;
+  bool shouldReportUploadFailure = false;
 
   if (uploadSucceeded) {
     hasSuccessfulUpload = true;
+    hasReportedUploadFailure = false;
     lastSuccessfulUploadAt = millis();
     setLedSignal(LED_UPLOAD_SUCCESS);
     Serial.print("{\"status\":\"upload_success\",\"httpStatus\":");
@@ -290,9 +383,27 @@ void sendWeatherPayload(const String& payload) {
     Serial.print(",\"failureCount\":");
     Serial.print(uploadFailureCount);
     Serial.println("}");
+
+    if (
+      !hasReportedUploadFailure ||
+      millis() - lastUploadFailureLogAt >= UPLOAD_FAILURE_LOG_INTERVAL_MS
+    ) {
+      shouldReportUploadFailure = true;
+      hasReportedUploadFailure = true;
+      lastUploadFailureLogAt = millis();
+    }
   }
 
   http.end();
+
+  if (shouldReportUploadFailure) {
+    sendDeviceLog(
+      "error",
+      "upload_failed",
+      String("Weather upload HTTP status ") + String(httpResponseCode) +
+        ", failure count " + String(uploadFailureCount)
+    );
+  }
 }
 
 void serviceRecoveryWatchdog() {
@@ -307,12 +418,20 @@ void serviceRecoveryWatchdog() {
   Serial.print("{\"status\":\"restarting\",\"reason\":\"no_successful_upload\",\"seconds\":");
   Serial.print(sinceSuccessfulUpload / 1000);
   Serial.println("}");
+  sendDeviceLog(
+    "error",
+    "recovery_restart",
+    String("No successful upload for ") + String(sinceSuccessfulUpload / 1000) + " seconds"
+  );
   delay(20);
   ESP.restart();
 }
 
 void setup() {
   Serial.begin(115200);
+  Serial.print("{\"status\":\"boot\",\"firmwareVersion\":\"");
+  Serial.print(FIRMWARE_VERSION);
+  Serial.println("\"}");
 
   pinMode(STATUS_LED_PIN, OUTPUT);
   digitalWrite(STATUS_LED_PIN, LOW);
@@ -336,6 +455,7 @@ void loop() {
   if (!bmeReady) {
     if (millis() - lastSensorInitializationAttemptAt >= SENSOR_RETRY_INTERVAL_MS) {
       bmeReady = initializeBme280();
+      reportSensorState();
     }
 
     delay(10);

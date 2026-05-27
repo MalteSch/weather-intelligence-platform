@@ -3,10 +3,11 @@
 ## 1. Project Overview
 
 This repository contains a personal ESP32 weather station and its supporting
-web service. An ESP32 samples environmental sensors, sends measurements and
-device health telemetry by HTTP, and supports local-network over-the-air
-(OTA) firmware updates. A Node.js/Express backend stores readings in SQLite
-and serves a static browser dashboard.
+web service. An ESP32 samples environmental sensors, sends measurements,
+device health telemetry and important status events by HTTP, and supports
+local-network over-the-air (OTA) firmware updates. A Node.js/Express backend
+stores readings and device logs in SQLite and serves a static browser
+dashboard.
 
 The project is intentionally learning-oriented: it uses a small, inspectable
 architecture while exercising embedded programming, REST APIs, persistent
@@ -24,7 +25,7 @@ ESP32 weather node
   - reports firmware/device health
   - services ArduinoOTA
         |
-        | HTTP POST /weather over WiFi
+        | HTTP POST /weather and /device/logs over WiFi
         v
 Node.js 20 / Express backend
   - validates and stores measurements
@@ -87,6 +88,8 @@ Implemented functionality:
 - Firmware version reporting through `firmwareVersion`.
 - Device health telemetry for uptime, heap memory, reconnects and upload
   failures.
+- Lightweight remote device event logging with recent logs shown in the
+  dashboard status panel.
 - ArduinoOTA service with password configuration and serial status events.
 - Upload recovery watchdog that restarts an ESP32 unable to complete a
   successful upload for 10 minutes.
@@ -161,10 +164,12 @@ Current runtime behavior:
 - Takes and uploads readings every 5 seconds.
 - Uses a 4-second HTTP client timeout.
 - Logs structured JSON-style status messages to serial at `115200` baud.
+- Posts important connected-state events to `/device/logs` with a short
+  timeout; WiFi-disconnected events remain serial-only.
 - Continues servicing WiFi, OTA, LED state and recovery logic if BME280
   initialization fails, and retries BME280 initialization periodically.
 
-The firmware currently identifies itself as `0.2.0-bme280` through the
+The firmware currently identifies itself as `0.2.1-device-logs` through the
 `FIRMWARE_VERSION` constant. Change that constant when producing a new
 firmware build so reported versions remain useful.
 
@@ -213,6 +218,12 @@ because WiFi is disconnected is logged but does not increment that counter.
 The recovery watchdog calls `ESP.restart()` when there has been no successful
 upload for 10 minutes. This applies both after startup before the first
 successful upload and after a previously working upload path stops succeeding.
+
+Remote logs cover boot delivery after connection, WiFi connection, OTA
+readiness/start/result, BME280 initialization state, upload failures and
+recovery restarts. Repeated upload failures are reported at most once per
+minute until uploads recover; ordinary successful measurements do not create
+log rows.
 
 Status LED behavior on GPIO `2`:
 
@@ -300,6 +311,26 @@ Without both query parameters, the endpoint returns the newest 2000 rows,
 ordered chronologically for display. A single supplied boundary does not
 currently apply partial filtering.
 
+### `POST /device/logs`
+
+Stores a lightweight ESP32 status event. `level` must be `info`, `warn` or
+`error`; `event` is required; remaining fields are optional.
+
+```json
+{
+  "level": "error",
+  "event": "upload_failed",
+  "message": "Weather upload HTTP status -1, failure count 2",
+  "firmwareVersion": "0.2.1-device-logs",
+  "uptimeSeconds": 420
+}
+```
+
+### `GET /device/logs`
+
+Returns recent device log rows newest first. It defaults to 10 rows and
+accepts a bounded `limit` parameter, for example `GET /device/logs?limit=8`.
+
 ### `GET /health`
 
 Provides backend process liveness only:
@@ -311,7 +342,8 @@ Provides backend process liveness only:
 ```
 
 This endpoint is distinct from ESP32 health telemetry, which is stored with
-weather measurements and returned by the weather read endpoints.
+weather measurements, and from ESP32 device logs. Device conditions therefore
+cannot cause a backend liveness probe to fail.
 
 ## 10. SQLite Schema
 
@@ -332,6 +364,16 @@ CREATE TABLE IF NOT EXISTS weather_measurements (
   wifi_reconnect_count INTEGER,
   upload_failure_count INTEGER,
   last_successful_upload_seconds_ago INTEGER,
+  received_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS device_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  level TEXT NOT NULL,
+  event TEXT NOT NULL,
+  message TEXT,
+  firmware_version TEXT,
+  uptime_seconds INTEGER,
   received_at TEXT NOT NULL
 );
 ```
@@ -390,6 +432,7 @@ Implemented UI behavior:
 - Online/stale state based on whether the latest reading is newer than
   5 minutes.
 - Display of reported firmware version and device health telemetry.
+- Compact recent device log list with distinct warning and error tones.
 - Temperature, humidity, pressure and light-level history charts.
 - Chart.js `time` x-axes driven by real `receivedAt` timestamps, preserving
   visible time gaps when data is missing.

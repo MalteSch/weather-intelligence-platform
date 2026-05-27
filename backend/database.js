@@ -11,6 +11,30 @@ const db = new sqlite3.Database("data/weather.db", (error) => {
 
 db.ready = new Promise((resolve, reject) => {
   db.serialize(() => {
+    const createDeviceLogsTable = () => {
+      db.run(
+        `
+          CREATE TABLE IF NOT EXISTS device_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT NOT NULL,
+            event TEXT NOT NULL,
+            message TEXT,
+            firmware_version TEXT,
+            uptime_seconds INTEGER,
+            received_at TEXT NOT NULL
+          )
+        `,
+        (error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        }
+      );
+    };
+
     db.run(
       `
         CREATE TABLE IF NOT EXISTS weather_measurements (
@@ -56,7 +80,7 @@ db.ready = new Promise((resolve, reject) => {
           );
 
           if (missingColumns.length === 0) {
-            resolve();
+            createDeviceLogsTable();
             return;
           }
 
@@ -75,7 +99,7 @@ db.ready = new Promise((resolve, reject) => {
                 migratedColumnCount++;
 
                 if (migratedColumnCount === missingColumns.length) {
-                  resolve();
+                  createDeviceLogsTable();
                 }
               }
             );

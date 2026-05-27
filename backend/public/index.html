@@ -81,7 +81,8 @@
     }
 
     .connection-panel {
-      min-width: 235px;
+      width: min(385px, 100%);
+      min-width: min(300px, 100%);
       padding: 16px 18px;
       background: rgba(16, 30, 51, 0.76);
       border: 1px solid var(--border);
@@ -168,6 +169,79 @@
 
     .health-value.warning {
       color: var(--warning);
+    }
+
+    .device-logs {
+      margin-top: 13px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .device-logs-title {
+      margin: 0 0 9px;
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .device-log-list {
+      display: grid;
+      gap: 7px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .device-log-item {
+      padding: 7px 8px;
+      border-radius: 8px;
+      background: rgba(7, 17, 31, 0.42);
+      font-size: 0.73rem;
+      line-height: 1.35;
+    }
+
+    .device-log-meta {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      color: var(--muted);
+    }
+
+    .device-log-level {
+      border-radius: 999px;
+      padding: 1px 5px;
+      color: var(--success);
+      background: rgba(52, 211, 153, 0.12);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .device-log-level.warn {
+      color: var(--warning);
+      background: rgba(251, 191, 36, 0.13);
+    }
+
+    .device-log-level.error {
+      color: var(--danger);
+      background: rgba(248, 113, 113, 0.12);
+    }
+
+    .device-log-event {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .device-log-message {
+      margin: 4px 0 0;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .device-log-empty {
+      color: var(--muted);
+      font-size: 0.76rem;
     }
 
     .summary-grid {
@@ -764,6 +838,12 @@
         <div class="health-detail" id="deviceHealth">
           <div>Device health: waiting for data</div>
         </div>
+        <section class="device-logs" aria-label="Recent device logs">
+          <p class="device-logs-title">Device logs</p>
+          <ol class="device-log-list" id="deviceLogs">
+            <li class="device-log-empty">Loading device logs...</li>
+          </ol>
+        </section>
       </div>
     </header>
 
@@ -1078,6 +1158,16 @@
       return await response.json();
     }
 
+    async function loadDeviceLogs() {
+      const response = await fetch("/device/logs?limit=8");
+
+      if (!response.ok) {
+        throw new Error(`Device log request failed: ${response.status}`);
+      }
+
+      return await response.json();
+    }
+
     function updateSelectedPresetWindow() {
       selectedTo = new Date();
       selectedTo.setMilliseconds(0);
@@ -1327,6 +1417,61 @@
       }
 
       return value === 0 ? "healthy" : "warning";
+    }
+
+    function renderDeviceLogs(logs) {
+      const logList = document.getElementById("deviceLogs");
+      logList.replaceChildren();
+
+      if (logs.length === 0) {
+        const emptyState = document.createElement("li");
+        emptyState.className = "device-log-empty";
+        emptyState.innerText = "No device logs yet.";
+        logList.appendChild(emptyState);
+        return;
+      }
+
+      logs.forEach((log) => {
+        const item = document.createElement("li");
+        item.className = "device-log-item";
+
+        const meta = document.createElement("div");
+        meta.className = "device-log-meta";
+
+        const timestamp = document.createElement("time");
+        timestamp.dateTime = log.receivedAt;
+        timestamp.innerText = formatTime(log.receivedAt);
+
+        const level = document.createElement("span");
+        level.className = `device-log-level ${log.level}`;
+        level.innerText = log.level;
+
+        const event = document.createElement("span");
+        event.className = "device-log-event";
+        event.innerText = log.event;
+
+        meta.append(timestamp, level, event);
+        item.appendChild(meta);
+
+        if (log.message) {
+          const message = document.createElement("p");
+          message.className = "device-log-message";
+          message.innerText = log.message;
+          item.appendChild(message);
+        }
+
+        logList.appendChild(item);
+      });
+    }
+
+    async function renderRecentDeviceLogs() {
+      try {
+        renderDeviceLogs(await loadDeviceLogs());
+      } catch (error) {
+        console.error("Failed to load device logs:", error);
+        const logList = document.getElementById("deviceLogs");
+        logList.innerHTML = '<li class="device-log-empty">Device logs unavailable.</li>';
+      }
     }
 
     function renderDeviceHealth(data, recentUploadFailures) {
@@ -2014,6 +2159,7 @@
     async function refreshDashboard({ showHistoryLoading = false } = {}) {
       await Promise.all([
         renderCurrentValues(),
+        renderRecentDeviceLogs(),
         renderCharts({ showLoading: showHistoryLoading }),
       ]);
     }

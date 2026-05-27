@@ -89,6 +89,69 @@ function mapWeatherRow(row) {
   };
 }
 
+const DEVICE_LOG_LEVELS = new Set(["info", "warn", "error"]);
+
+function validateDeviceLog(payload) {
+  const errors = [];
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return ["request body must be a JSON object"];
+  }
+
+  if (!DEVICE_LOG_LEVELS.has(payload.level)) {
+    errors.push('level must be one of "info", "warn", or "error"');
+  }
+
+  if (
+    typeof payload.event !== "string" ||
+    payload.event.trim().length === 0 ||
+    payload.event.length > 80
+  ) {
+    errors.push("event must be a non-empty string of at most 80 characters");
+  }
+
+  if (
+    payload.message !== undefined &&
+    payload.message !== null &&
+    (typeof payload.message !== "string" || payload.message.length > 500)
+  ) {
+    errors.push("message must be a string of at most 500 characters");
+  }
+
+  if (
+    payload.firmwareVersion !== undefined &&
+    payload.firmwareVersion !== null &&
+    (typeof payload.firmwareVersion !== "string" ||
+      payload.firmwareVersion.length > 80)
+  ) {
+    errors.push("firmwareVersion must be a string of at most 80 characters");
+  }
+
+  if (
+    payload.uptimeSeconds !== undefined &&
+    payload.uptimeSeconds !== null &&
+    (typeof payload.uptimeSeconds !== "number" ||
+      !Number.isFinite(payload.uptimeSeconds) ||
+      payload.uptimeSeconds < 0)
+  ) {
+    errors.push("uptimeSeconds must be a non-negative number");
+  }
+
+  return errors;
+}
+
+function mapDeviceLogRow(row) {
+  return {
+    id: row.id,
+    level: row.level,
+    event: row.event,
+    message: row.message,
+    firmwareVersion: row.firmware_version,
+    uptimeSeconds: row.uptime_seconds,
+    receivedAt: row.received_at,
+  };
+}
+
 app.post("/weather", (req, res) => {
   const validationErrors = validateWeatherMeasurement(req.body);
 
@@ -292,6 +355,101 @@ app.get("/weather/history", (req, res) => {
     const history = rows.map(mapWeatherRow);
 
     res.status(200).json(history);
+  });
+});
+
+app.post("/device/logs", (req, res) => {
+  const validationErrors = validateDeviceLog(req.body);
+
+  if (validationErrors.length > 0) {
+    console.error("Invalid device log payload:", validationErrors);
+
+    return res.status(400).json({
+      status: "error",
+      errors: validationErrors,
+    });
+  }
+
+  const deviceLog = {
+    level: req.body.level,
+    event: req.body.event.trim(),
+    message: req.body.message ?? null,
+    firmwareVersion: req.body.firmwareVersion ?? null,
+    uptimeSeconds: req.body.uptimeSeconds ?? null,
+    receivedAt: new Date().toISOString(),
+  };
+
+  const query = `
+    INSERT INTO device_logs (
+      level,
+      event,
+      message,
+      firmware_version,
+      uptime_seconds,
+      received_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+  `;
+
+  db.run(
+    query,
+    [
+      deviceLog.level,
+      deviceLog.event,
+      deviceLog.message,
+      deviceLog.firmwareVersion,
+      deviceLog.uptimeSeconds,
+      deviceLog.receivedAt,
+    ],
+    function (error) {
+      if (error) {
+        console.error("Failed to store device log:", error.message);
+
+        return res.status(500).json({
+          status: "error",
+          message: "Failed to store device log",
+        });
+      }
+
+      res.status(201).json({
+        status: "ok",
+        message: "Device log stored",
+        id: this.lastID,
+      });
+    }
+  );
+});
+
+app.get("/device/logs", (req, res) => {
+  const requestedLimit = Number.parseInt(req.query.limit, 10);
+  const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+    ? Math.min(requestedLimit, 100)
+    : 10;
+  const query = `
+    SELECT
+      id,
+      level,
+      event,
+      message,
+      firmware_version,
+      uptime_seconds,
+      received_at
+    FROM device_logs
+    ORDER BY received_at DESC, id DESC
+    LIMIT ?
+  `;
+
+  db.all(query, [limit], (error, rows) => {
+    if (error) {
+      console.error("Failed to load device logs:", error.message);
+
+      return res.status(500).json({
+        status: "error",
+        message: "Failed to load device logs",
+      });
+    }
+
+    res.status(200).json(rows.map(mapDeviceLogRow));
   });
 });
 
