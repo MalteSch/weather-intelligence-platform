@@ -15,7 +15,7 @@ storage, visualization, containers, and self-hosted deployment.
 ## 2. Architecture Overview
 
 ```text
-BMP280 + BH1750 sensors
+BME280 + BH1750 sensors
         |
         | I2C
         v
@@ -66,7 +66,7 @@ The implemented firmware in
 | Component | Purpose | Firmware configuration |
 | --- | --- | --- |
 | ESP32 development board | Sensor controller, WiFi client and OTA target | WiFi station mode |
-| BMP280 | Temperature and barometric pressure | I2C address `0x76` |
+| BME280 | Temperature, humidity and barometric pressure | I2C address `0x76` |
 | BH1750 | Ambient light measurement | I2C |
 | On-board/external status LED | Connection and upload feedback | GPIO `2` |
 
@@ -77,13 +77,11 @@ I2C wiring configured in firmware:
 | SDA | GPIO `21` |
 | SCL | GPIO `22` |
 
-Humidity measurement is not currently implemented.
-
 ## 4. Features
 
 Implemented functionality:
 
-- ESP32 acquisition of temperature, pressure and light level.
+- ESP32 acquisition of temperature, humidity, pressure and light level.
 - WiFi RSSI reporting alongside each measurement.
 - HTTP measurement uploads every 5 seconds when WiFi is connected.
 - Firmware version reporting through `firmwareVersion`.
@@ -134,7 +132,7 @@ the backend opens `data/weather.db`, which is persisted through the
 The firmware is a single Arduino sketch. It uses these libraries:
 
 - `Wire`
-- `Adafruit_BMP280`
+- `Adafruit_BME280`
 - `BH1750`
 - `WiFi`
 - `ArduinoOTA`
@@ -157,16 +155,16 @@ or OTA passwords.
 
 Current runtime behavior:
 
-- Initializes I2C on GPIO `21`/`22`, the BH1750, and the BMP280 at `0x76`.
+- Initializes I2C on GPIO `21`/`22`, the BH1750, and the BME280 at `0x76`.
 - Attempts WiFi reconnects at 10-second intervals after disconnection.
 - Starts ArduinoOTA after a WiFi connection is established.
 - Takes and uploads readings every 5 seconds.
 - Uses a 4-second HTTP client timeout.
 - Logs structured JSON-style status messages to serial at `115200` baud.
-- Continues servicing WiFi, OTA, LED state and recovery logic if BMP280
-  initialization fails.
+- Continues servicing WiFi, OTA, LED state and recovery logic if BME280
+  initialization fails, and retries BME280 initialization periodically.
 
-The firmware currently identifies itself as `0.1.0-ota-test` through the
+The firmware currently identifies itself as `0.2.0-bme280` through the
 `FIRMWARE_VERSION` constant. Change that constant when producing a new
 firmware build so reported versions remain useful.
 
@@ -188,7 +186,7 @@ Practical OTA workflow:
    check the dashboard's reported firmware version after a new measurement.
 
 The sketch services `ArduinoOTA.handle()` during ordinary operation and while
-waiting on a missing BMP280. OTA failures are reported over serial with the
+waiting on a missing BME280. OTA failures are reported over serial with the
 ArduinoOTA error category.
 
 There is currently no automated firmware build or OTA deployment workflow
@@ -232,17 +230,19 @@ columns use `snake_case`.
 
 ### `POST /weather`
 
-Stores one measurement. The four measurement fields are required. Firmware
-and health fields are optional to preserve compatibility with older sensor
-payloads.
+Stores one measurement. Temperature, pressure, light level and WiFi RSSI are
+required; humidity is validated when supplied and remains optional during the
+firmware rollout and for compatibility with older senders. Firmware and health
+fields are optional.
 
 ```json
 {
   "temperatureCelsius": 22.41,
   "pressureHpa": 1013.27,
+  "humidityPercent": 47.26,
   "lightLevelLux": 118.5,
   "wifiRssiDbm": -52,
-  "firmwareVersion": "0.1.0-ota-test",
+  "firmwareVersion": "0.2.0-bme280",
   "uptimeSeconds": 420,
   "freeHeapBytes": 214368,
   "wifiReconnectCount": 0,
@@ -274,9 +274,10 @@ when no measurement exists.
   "id": 295,
   "temperatureCelsius": 22.41,
   "pressureHpa": 1013.27,
+  "humidityPercent": 47.26,
   "lightLevelLux": 118.5,
   "wifiRssiDbm": -52,
-  "firmwareVersion": "0.1.0-ota-test",
+  "firmwareVersion": "0.2.0-bme280",
   "uptimeSeconds": 420,
   "freeHeapBytes": 214368,
   "wifiReconnectCount": 0,
@@ -322,6 +323,7 @@ CREATE TABLE IF NOT EXISTS weather_measurements (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   temperature_celsius REAL NOT NULL,
   pressure_hpa REAL NOT NULL,
+  humidity_percent REAL,
   light_level_lux REAL NOT NULL,
   wifi_rssi_dbm INTEGER NOT NULL,
   firmware_version TEXT,
@@ -339,6 +341,7 @@ Older persistent databases are upgraded in place. On startup,
 runs `ALTER TABLE ... ADD COLUMN` for missing optional columns:
 
 ```sql
+ALTER TABLE weather_measurements ADD COLUMN humidity_percent REAL;
 ALTER TABLE weather_measurements ADD COLUMN firmware_version TEXT;
 ALTER TABLE weather_measurements ADD COLUMN uptime_seconds INTEGER;
 ALTER TABLE weather_measurements ADD COLUMN free_heap_bytes INTEGER;
@@ -358,6 +361,7 @@ Field naming boundary:
 | --- | --- |
 | `temperature_celsius` | `temperatureCelsius` |
 | `pressure_hpa` | `pressureHpa` |
+| `humidity_percent` | `humidityPercent` |
 | `light_level_lux` | `lightLevelLux` |
 | `wifi_rssi_dbm` | `wifiRssiDbm` |
 | `firmware_version` | `firmwareVersion` |
@@ -381,12 +385,12 @@ External browser-side libraries:
 
 Implemented UI behavior:
 
-- Current cards for temperature, pressure, light level, WiFi RSSI and last
-  update.
+- Current cards for temperature, humidity, pressure, light level, WiFi RSSI
+  and last update.
 - Online/stale state based on whether the latest reading is newer than
   5 minutes.
 - Display of reported firmware version and device health telemetry.
-- Temperature, pressure and light-level history charts.
+- Temperature, humidity, pressure and light-level history charts.
 - Chart.js `time` x-axes driven by real `receivedAt` timestamps, preserving
   visible time gaps when data is missing.
 - Rolling presets for 12 hours, 24 hours, 3 days and 7 days.
@@ -505,7 +509,7 @@ the current repository.
 
 The following are possible future directions, not current functionality:
 
-- Humidity measurement and expanded outdoor hardware packaging.
+- Expanded outdoor hardware packaging.
 - Authenticated ingestion and dashboard access.
 - Export, aggregation or longer-term time-series analysis.
 - Buffered sensor uploads during network interruptions.

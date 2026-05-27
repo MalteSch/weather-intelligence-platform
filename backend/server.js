@@ -29,6 +29,17 @@ function validateWeatherMeasurement(payload) {
     errors.push("pressureHpa must be a number");
   }
 
+  if (
+    payload.humidityPercent !== undefined &&
+    payload.humidityPercent !== null &&
+    (typeof payload.humidityPercent !== "number" ||
+      !Number.isFinite(payload.humidityPercent) ||
+      payload.humidityPercent < 0 ||
+      payload.humidityPercent > 100)
+  ) {
+    errors.push("humidityPercent must be a number between 0 and 100");
+  }
+
   if (typeof payload.lightLevelLux !== "number") {
     errors.push("lightLevelLux must be a number");
   }
@@ -65,6 +76,7 @@ function mapWeatherRow(row) {
     id: row.id,
     temperatureCelsius: row.temperature_celsius,
     pressureHpa: row.pressure_hpa,
+    humidityPercent: row.humidity_percent,
     lightLevelLux: row.light_level_lux,
     wifiRssiDbm: row.wifi_rssi_dbm,
     firmwareVersion: row.firmware_version,
@@ -98,6 +110,7 @@ app.post("/weather", (req, res) => {
     INSERT INTO weather_measurements (
       temperature_celsius,
       pressure_hpa,
+      humidity_percent,
       light_level_lux,
       wifi_rssi_dbm,
       firmware_version,
@@ -108,7 +121,7 @@ app.post("/weather", (req, res) => {
       last_successful_upload_seconds_ago,
       received_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.run(
@@ -116,6 +129,7 @@ app.post("/weather", (req, res) => {
     [
       measurement.temperatureCelsius,
       measurement.pressureHpa,
+      measurement.humidityPercent ?? null,
       measurement.lightLevelLux,
       measurement.wifiRssiDbm,
       measurement.firmwareVersion ?? null,
@@ -159,6 +173,7 @@ app.get("/weather/latest", (req, res) => {
       id,
       temperature_celsius,
       pressure_hpa,
+      humidity_percent,
       light_level_lux,
       wifi_rssi_dbm,
       firmware_version,
@@ -203,6 +218,7 @@ app.get("/weather/history", (req, res) => {
       id,
       temperature_celsius,
       pressure_hpa,
+      humidity_percent,
       light_level_lux,
       wifi_rssi_dbm,
       firmware_version,
@@ -230,6 +246,7 @@ app.get("/weather/history", (req, res) => {
         id,
         temperature_celsius,
         pressure_hpa,
+        humidity_percent,
         light_level_lux,
         wifi_rssi_dbm,
         firmware_version,
@@ -244,6 +261,7 @@ app.get("/weather/history", (req, res) => {
           id,
           temperature_celsius,
           pressure_hpa,
+          humidity_percent,
           light_level_lux,
           wifi_rssi_dbm,
           firmware_version,

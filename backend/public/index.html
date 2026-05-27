@@ -172,7 +172,7 @@
 
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 14px;
       margin-bottom: 22px;
     }
@@ -599,6 +599,10 @@
       color: #a78bfa;
     }
 
+    .humidity-series .overlay-stat-title {
+      color: #34d399;
+    }
+
     .light-series .overlay-stat-title {
       color: #fbbf24;
     }
@@ -775,6 +779,11 @@
       </article>
 
       <article class="metric-card">
+        <div class="metric-label">Humidity</div>
+        <div class="metric-value" id="humidity">-- %</div>
+      </article>
+
+      <article class="metric-card">
         <div class="metric-label">Light level</div>
         <div class="metric-value" id="light">-- lux</div>
       </article>
@@ -864,6 +873,10 @@
           <input type="checkbox" checked onchange="setOverlaySeries('pressure', this.checked)" />
           Pressure <span class="series-unit">hPa</span>
         </label>
+        <label class="series-option humidity-series">
+          <input type="checkbox" onchange="setOverlaySeries('humidity', this.checked)" />
+          Humidity <span class="series-unit">%</span>
+        </label>
         <label class="series-option light-series">
           <input type="checkbox" onchange="setOverlaySeries('light', this.checked)" />
           Light level <span class="series-unit">lux</span>
@@ -899,6 +912,21 @@
         <div class="chart-frame" id="pressureChartFrame">
           <p class="chart-state" id="pressureChartState" aria-live="polite"></p>
           <canvas id="pressureChart"></canvas>
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <header class="chart-header">
+          <h3 class="chart-title">Humidity</h3>
+          <dl class="chart-stats" aria-label="Humidity statistics">
+            <div class="chart-stat"><dt>Min</dt><dd id="humidityMin">--</dd></div>
+            <div class="chart-stat"><dt>Avg</dt><dd id="humidityAvg">--</dd></div>
+            <div class="chart-stat"><dt>Max</dt><dd id="humidityMax">--</dd></div>
+          </dl>
+        </header>
+        <div class="chart-frame" id="humidityChartFrame">
+          <p class="chart-state" id="humidityChartState" aria-live="polite"></p>
+          <canvas id="humidityChart"></canvas>
         </div>
       </article>
 
@@ -941,6 +969,7 @@
     let temperatureChart;
     let pressureChart;
     let lightChart;
+    let humidityChart;
     let overlayChart;
     let latestHistoryRequestId = 0;
     let selectedPresetHours = 12;
@@ -952,6 +981,7 @@
     const overlaySeries = {
       temperature: true,
       pressure: true,
+      humidity: false,
       light: false,
     };
     const MIN_RANGE_STEP_MS = 1000;
@@ -973,6 +1003,14 @@
         fractionDigits: 1,
         borderColor: "#a78bfa",
         backgroundColor: "rgba(167, 139, 250, 0.11)",
+      },
+      humidity: {
+        label: "Humidity",
+        field: "humidityPercent",
+        unit: "%",
+        fractionDigits: 1,
+        borderColor: "#34d399",
+        backgroundColor: "rgba(52, 211, 153, 0.1)",
       },
       light: {
         label: "Light level",
@@ -1365,6 +1403,10 @@
           `${data.temperatureCelsius} \u00b0C`;
         document.getElementById("pressure").innerText =
           `${data.pressureHpa} hPa`;
+        document.getElementById("humidity").innerText =
+          typeof data.humidityPercent === "number"
+            ? `${data.humidityPercent} %`
+            : "-- %";
         document.getElementById("light").innerText =
           `${data.lightLevelLux} lux`;
         document.getElementById("wifi").innerText =
@@ -1417,6 +1459,7 @@
       [
         "temperatureMin", "temperatureAvg", "temperatureMax",
         "pressureMin", "pressureAvg", "pressureMax",
+        "humidityMin", "humidityAvg", "humidityMax",
         "lightMin", "lightAvg", "lightMax",
       ].forEach((id) => {
         document.getElementById(id).innerText = "--";
@@ -1441,7 +1484,7 @@
     }
 
     function setHistoryFrameState(state = "", message = "") {
-      ["temperature", "pressure", "light"].forEach((prefix) => {
+      ["temperature", "pressure", "humidity", "light"].forEach((prefix) => {
         setChartFrameState(prefix, state, message);
       });
     }
@@ -1643,6 +1686,13 @@
         });
         renderChartStatistics({
           history,
+          field: SERIES_CONFIG.humidity.field,
+          prefix: "humidity",
+          unit: SERIES_CONFIG.humidity.unit,
+          fractionDigits: SERIES_CONFIG.humidity.fractionDigits,
+        });
+        renderChartStatistics({
+          history,
           field: SERIES_CONFIG.light.field,
           prefix: "light",
           unit: SERIES_CONFIG.light.unit,
@@ -1651,6 +1701,7 @@
 
         renderTemperatureChart(points.temperature);
         renderPressureChart(points.pressure);
+        renderHumidityChart(points.humidity);
         renderLightChart(points.light);
         hasRenderedHistory = true;
       } catch (error) {
@@ -1793,7 +1844,7 @@
       isResettingZoom = true;
 
       try {
-        [temperatureChart, pressureChart, lightChart, overlayChart].forEach((chart) => {
+        [temperatureChart, pressureChart, humidityChart, lightChart, overlayChart].forEach((chart) => {
           if (chart && typeof chart.resetZoom === "function") {
             chart.resetZoom();
           }
@@ -1902,6 +1953,24 @@
       });
     }
 
+    function renderHumidityChart(humidityPoints) {
+      const context = document.getElementById("humidityChart").getContext("2d");
+      const dataset = createLineDataset("humidity", humidityPoints);
+
+      if (humidityChart) {
+        updateChartData(humidityChart, dataset);
+        return;
+      }
+
+      humidityChart = new Chart(context, {
+        type: "line",
+        data: {
+          datasets: [dataset],
+        },
+        options: chartOptions(),
+      });
+    }
+
     function renderOverlayChart(points) {
       const datasets = getEnabledOverlaySeries().map((series) =>
         createLineDataset(series, points[series], { isOverlay: true })
@@ -1923,7 +1992,7 @@
     }
 
     function destroySeparateCharts() {
-      [temperatureChart, pressureChart, lightChart].forEach((chart) => {
+      [temperatureChart, pressureChart, humidityChart, lightChart].forEach((chart) => {
         if (chart) {
           chart.destroy();
         }
@@ -1931,6 +2000,7 @@
 
       temperatureChart = undefined;
       pressureChart = undefined;
+      humidityChart = undefined;
       lightChart = undefined;
     }
 

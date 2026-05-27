@@ -1,12 +1,12 @@
 #include "../../secrets.h"
 #include <Wire.h>
-#include <Adafruit_BMP280.h>
+#include <Adafruit_BME280.h>
 #include <BH1750.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 #include <HTTPClient.h>
 
-Adafruit_BMP280 bmp;
+Adafruit_BME280 bme;
 BH1750 lightMeter;
 
 const int STATUS_LED_PIN = 2;
@@ -14,10 +14,11 @@ const int SDA_PIN = 21;
 const int SCL_PIN = 22;
 const unsigned long MEASUREMENT_INTERVAL_MS = 5000;
 const unsigned long WIFI_RECONNECT_INTERVAL_MS = 10000;
+const unsigned long SENSOR_RETRY_INTERVAL_MS = 30000;
 const unsigned long UPLOAD_RECOVERY_TIMEOUT_MS = 10UL * 60UL * 1000UL;
 const uint16_t HTTP_TIMEOUT_MS = 4000;
 const uint8_t SENSOR_ADDRESS = 0x76;
-const char* FIRMWARE_VERSION = "0.1.0-ota-test";
+const char* FIRMWARE_VERSION = "0.2.0-bme280";
 
 enum LedSignal {
   LED_IDLE,
@@ -30,12 +31,14 @@ LedSignal ledSignal = LED_IDLE;
 unsigned long ledSignalStartedAt = 0;
 unsigned long lastMeasurementAt = 0;
 unsigned long lastWiFiAttemptAt = 0;
+unsigned long lastSensorInitializationAttemptAt = 0;
 unsigned long lastSuccessfulUploadAt = 0;
 unsigned long wifiReconnectCount = 0;
 unsigned long uploadFailureCount = 0;
 bool hasSuccessfulUpload = false;
 bool wifiWasConnected = false;
 bool otaStarted = false;
+bool bmeReady = false;
 
 void setLedSignal(LedSignal signal) {
   ledSignal = signal;
@@ -179,7 +182,27 @@ void serviceOta() {
   }
 }
 
-String buildWeatherPayload(float temperature, float pressure, float lightLevelLux) {
+bool initializeBme280() {
+  lastSensorInitializationAttemptAt = millis();
+
+  if (!bme.begin(SENSOR_ADDRESS)) {
+    Serial.println(
+      "{\"status\":\"sensor_error\",\"sensor\":\"BME280\",\"message\":\"initialization failed at I2C address 0x76\","
+      "\"hint\":\"check SDA GPIO21, SCL GPIO22, CSB HIGH for I2C, and SDO address selection\"}"
+    );
+    return false;
+  }
+
+  Serial.println("{\"status\":\"ok\",\"message\":\"BME280 initialized at I2C address 0x76\"}");
+  return true;
+}
+
+String buildWeatherPayload(
+  float temperature,
+  float pressure,
+  float humidityPercent,
+  float lightLevelLux
+) {
   String payload = "{";
 
   payload += "\"temperatureCelsius\":";
@@ -188,6 +211,10 @@ String buildWeatherPayload(float temperature, float pressure, float lightLevelLu
 
   payload += "\"pressureHpa\":";
   payload += String(pressure, 2);
+  payload += ",";
+
+  payload += "\"humidityPercent\":";
+  payload += String(humidityPercent, 2);
   payload += ",";
 
   payload += "\"wifiIp\":\"";
@@ -296,19 +323,7 @@ void setup() {
   Wire.begin(SDA_PIN, SCL_PIN);
   lightMeter.begin();
 
-  if (!bmp.begin(SENSOR_ADDRESS)) {
-    Serial.println("{\"status\":\"error\",\"message\":\"BMP280 not found\"}");
-
-    while (true) {
-      serviceConnectivity();
-      serviceOta();
-      serviceStatusLed();
-      serviceRecoveryWatchdog();
-      delay(10);
-    }
-  }
-
-  Serial.println("{\"status\":\"ok\",\"message\":\"BMP280 initialized\"}");
+  bmeReady = initializeBme280();
   lastMeasurementAt = millis() - MEASUREMENT_INTERVAL_MS;
 }
 
@@ -318,6 +333,15 @@ void loop() {
   serviceStatusLed();
   serviceRecoveryWatchdog();
 
+  if (!bmeReady) {
+    if (millis() - lastSensorInitializationAttemptAt >= SENSOR_RETRY_INTERVAL_MS) {
+      bmeReady = initializeBme280();
+    }
+
+    delay(10);
+    return;
+  }
+
   if (millis() - lastMeasurementAt < MEASUREMENT_INTERVAL_MS) {
     delay(10);
     return;
@@ -325,10 +349,11 @@ void loop() {
 
   lastMeasurementAt = millis();
 
-  float temperature = bmp.readTemperature();
-  float pressure = bmp.readPressure() / 100.0;
+  float temperature = bme.readTemperature();
+  float pressure = bme.readPressure() / 100.0;
+  float humidityPercent = bme.readHumidity();
   float lightLevelLux = lightMeter.readLightLevel();
-  String payload = buildWeatherPayload(temperature, pressure, lightLevelLux);
+  String payload = buildWeatherPayload(temperature, pressure, humidityPercent, lightLevelLux);
 
   Serial.println(payload);
   sendWeatherPayload(payload);

@@ -17,6 +17,7 @@ db.ready = new Promise((resolve, reject) => {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           temperature_celsius REAL NOT NULL,
           pressure_hpa REAL NOT NULL,
+          humidity_percent REAL,
           light_level_lux REAL NOT NULL,
           wifi_rssi_dbm INTEGER NOT NULL,
           firmware_version TEXT,
@@ -42,6 +43,7 @@ db.ready = new Promise((resolve, reject) => {
 
           const existingColumnNames = new Set(columns.map((column) => column.name));
           const optionalColumns = [
+            ["humidity_percent", "REAL"],
             ["firmware_version", "TEXT"],
             ["uptime_seconds", "INTEGER"],
             ["free_heap_bytes", "INTEGER"],
