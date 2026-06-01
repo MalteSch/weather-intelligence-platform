@@ -333,9 +333,20 @@
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 18px;
+      gap: 14px;
       margin-bottom: 22px;
-      padding: 20px 22px;
+      padding: 18px 20px;
+    }
+
+    .controls-panel {
+      gap: 15px;
+    }
+
+    .panel-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
     }
 
     .panel-heading h2,
@@ -362,23 +373,20 @@
 
     .range-control-grid {
       display: grid;
-      grid-template-columns: minmax(270px, 0.8fr) minmax(510px, 1.5fr);
-      align-items: stretch;
-      gap: 14px;
+      grid-template-columns: minmax(230px, 0.75fr) minmax(430px, 1.35fr) minmax(295px, 0.9fr);
+      align-items: end;
+      gap: 18px;
     }
 
     .range-group {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
     }
 
     .range-control-card {
       min-width: 0;
-      padding: 14px;
-      border-radius: 12px;
-      background: rgba(7, 17, 31, 0.34);
-      border: 1px solid rgba(148, 163, 184, 0.14);
+      padding: 0;
     }
 
     .control-label {
@@ -394,7 +402,7 @@
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       align-items: end;
-      gap: 9px;
+      gap: 7px;
     }
 
     .time-controls button {
@@ -406,7 +414,7 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(175px, 1fr)) auto;
       align-items: end;
-      gap: 9px;
+      gap: 7px;
     }
 
     button {
@@ -472,6 +480,17 @@
       font-size: 0.87rem;
     }
 
+    .chart-display-group {
+      min-width: 0;
+    }
+
+    .chart-display-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
     .section-heading {
       display: flex;
       justify-content: space-between;
@@ -484,13 +503,6 @@
       color: #bceaff;
     }
 
-    .trend-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-shrink: 0;
-    }
-
     .mode-switch {
       display: flex;
       padding: 3px;
@@ -501,7 +513,7 @@
 
     .mode-button {
       height: 36px;
-      padding: 0 13px;
+      padding: 0 11px;
       background: transparent;
       color: var(--muted);
       font-size: 0.84rem;
@@ -519,8 +531,11 @@
 
     .reset-zoom-button {
       flex-shrink: 0;
+      height: 36px;
+      padding: 0 12px;
       border-color: rgba(56, 189, 248, 0.28);
       background: rgba(56, 189, 248, 0.09);
+      font-size: 0.84rem;
     }
 
     .overlay-controls {
@@ -707,13 +722,21 @@
       opacity: 0.32;
     }
 
-    @media (max-width: 1020px) {
+    @media (max-width: 1120px) {
       .summary-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
 
       .range-control-grid {
-        grid-template-columns: minmax(245px, 0.8fr) minmax(0, 1.45fr);
+        grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.45fr);
+      }
+
+      .chart-display-group {
+        grid-column: 1 / -1;
+      }
+
+      .chart-display-controls {
+        justify-content: flex-start;
       }
     }
 
@@ -752,6 +775,11 @@
         padding: 17px;
       }
 
+      .panel-heading {
+        flex-direction: column;
+        gap: 8px;
+      }
+
       .chart-header {
         flex-direction: column;
         align-items: flex-start;
@@ -763,14 +791,14 @@
         flex-direction: column;
       }
 
-      .trend-actions {
-        align-items: stretch;
-        flex-direction: column;
+      .mode-switch,
+      .chart-display-controls {
         width: 100%;
       }
 
-      .mode-switch {
-        width: 100%;
+      .chart-display-controls {
+        align-items: stretch;
+        flex-direction: column;
       }
 
       .mode-button {
@@ -894,10 +922,12 @@
       </article>
     </section>
 
-    <section class="panel" aria-label="Time range filters">
+    <section class="panel controls-panel" aria-label="Time range filters">
       <div class="panel-heading">
-        <h2>Observation window</h2>
-        <p>Use a rolling preset or define a fixed custom period.</p>
+        <div>
+          <h2>Observation window</h2>
+          <p>Use a rolling preset or define a fixed custom period.</p>
+        </div>
       </div>
 
       <div class="range-control-grid">
@@ -928,6 +958,17 @@
           </div>
           <p class="range-error" id="rangeError" aria-live="polite"></p>
         </div>
+
+        <div class="range-control-card range-group chart-display-group">
+          <p class="control-label">Display</p>
+          <div class="chart-display-controls">
+            <div class="mode-switch" role="group" aria-label="Chart display mode">
+              <button class="mode-button active" id="separateModeButton" aria-pressed="true" onclick="setChartMode('separate')">Separate charts</button>
+              <button class="mode-button" id="overlayModeButton" aria-pressed="false" onclick="setChartMode('overlay')">Overlay comparison</button>
+            </div>
+            <button class="reset-zoom-button" onclick="setPresetRange(12)">Back to 12h</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -938,13 +979,6 @@
           Readings refresh automatically every 5 seconds.
           <span class="chart-interaction-hint">Drag across a chart to zoom into a time range.</span>
         </p>
-      </div>
-      <div class="trend-actions">
-        <div class="mode-switch" role="group" aria-label="Chart display mode">
-          <button class="mode-button active" id="separateModeButton" aria-pressed="true" onclick="setChartMode('separate')">Separate charts</button>
-          <button class="mode-button" id="overlayModeButton" aria-pressed="false" onclick="setChartMode('overlay')">Overlay comparison</button>
-        </div>
-        <button class="reset-zoom-button" onclick="setPresetRange(12)">Back to 12h</button>
       </div>
     </div>
 
