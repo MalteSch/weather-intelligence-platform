@@ -1,12 +1,18 @@
 #include "../../secrets.h"
 #include <Wire.h>
+#include <Adafruit_GFX.h>
 #include <Adafruit_BME280.h>
+#include <Adafruit_SSD1306.h>
 #include <BH1750.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 #include <HTTPClient.h>
 
+const int OLED_WIDTH = 128;
+const int OLED_HEIGHT = 64;
+
 Adafruit_BME280 bme;
+Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 BH1750 lightMeter;
 
 const int STATUS_LED_PIN = 2;
@@ -22,7 +28,8 @@ const uint16_t HTTP_TIMEOUT_MS = 4000;
 const uint16_t DEVICE_LOG_HTTP_TIMEOUT_MS = 750;
 const uint8_t PRIMARY_SENSOR_ADDRESS = 0x76;
 const uint8_t SECONDARY_SENSOR_ADDRESS = 0x77;
-const char* FIRMWARE_VERSION = "0.2.3-i2c-diagnostics";
+const uint8_t OLED_ADDRESS = 0x3C;
+const char* FIRMWARE_VERSION = "0.3.0-oled";
 
 enum LedSignal {
   LED_IDLE,
@@ -49,8 +56,10 @@ bool hasReportedBoot = false;
 bool wifiWasConnected = false;
 bool otaStarted = false;
 bool bmeReady = false;
+bool oledReady = false;
 bool hasCompletedI2cScan = false;
 bool hasPendingI2cScanLog = false;
+bool hasPendingOledInitFailedLog = false;
 uint8_t bmeAddress = 0;
 String latestI2cScanMessage;
 
@@ -184,6 +193,68 @@ void sendPendingI2cScanResult() {
   }
 }
 
+void sendPendingOledInitFailedLog() {
+  if (hasPendingOledInitFailedLog && WiFi.status() == WL_CONNECTED) {
+    sendDeviceLog("error", "oled_init_failed", "SSD1306 OLED initialization failed at I2C address 0x3C");
+    hasPendingOledInitFailedLog = false;
+  }
+}
+
+void initializeOled() {
+  oledReady = display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
+
+  if (!oledReady) {
+    Serial.println("{\"status\":\"oled_init_failed\",\"address\":\"0x3C\"}");
+    if (WiFi.status() == WL_CONNECTED) {
+      sendDeviceLog("error", "oled_init_failed", "SSD1306 OLED initialization failed at I2C address 0x3C");
+    } else {
+      hasPendingOledInitFailedLog = true;
+    }
+    return;
+  }
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.cp437(true);
+  display.setCursor(0, 0);
+  display.println("Weather Station");
+  display.display();
+}
+
+void updateOledDisplay(
+  float temperature,
+  float pressure,
+  float humidityPercent,
+  float lightLevelLux
+) {
+  if (!oledReady) {
+    return;
+  }
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.cp437(true);
+  display.setCursor(0, 0);
+  display.println("Weather Station");
+  display.print("Temperature: ");
+  display.print(temperature, 1);
+  display.print(" ");
+  display.write(248);
+  display.println("C");
+  display.print("Humidity: ");
+  display.print(humidityPercent, 1);
+  display.println(" %");
+  display.print("Pressure: ");
+  display.print(pressure, 1);
+  display.println(" hPa");
+  display.print("Light level: ");
+  display.print(lightLevelLux, 0);
+  display.println(" lux");
+  display.display();
+}
+
 void reportSensorState() {
   if (
     WiFi.status() != WL_CONNECTED ||
@@ -313,6 +384,7 @@ void serviceConnectivity() {
     }
 
     sendPendingI2cScanResult();
+    sendPendingOledInitFailedLog();
     reportSensorState();
 
     if (!otaStarted) {
@@ -519,6 +591,7 @@ void setup() {
   beginWiFiConnection(false);
 
   Wire.begin(SDA_PIN, SCL_PIN);
+  initializeOled();
   bmeReady = initializeBme280();
 
   if (!hasCompletedI2cScan) {
@@ -556,6 +629,7 @@ void loop() {
   float pressure = bme.readPressure() / 100.0;
   float humidityPercent = bme.readHumidity();
   float lightLevelLux = lightMeter.readLightLevel();
+  updateOledDisplay(temperature, pressure, humidityPercent, lightLevelLux);
   String payload = buildWeatherPayload(temperature, pressure, humidityPercent, lightLevelLux);
 
   Serial.println(payload);

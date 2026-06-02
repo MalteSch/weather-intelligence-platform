@@ -135,7 +135,9 @@ the backend opens `data/weather.db`, which is persisted through the
 The firmware is a single Arduino sketch. It uses these libraries:
 
 - `Wire`
+- `Adafruit_GFX`
 - `Adafruit_BME280`
+- `Adafruit_SSD1306`
 - `BH1750`
 - `WiFi`
 - `ArduinoOTA`
@@ -158,18 +160,19 @@ or OTA passwords.
 
 Current runtime behavior:
 
-- Initializes I2C on GPIO `21`/`22`, the BH1750, and the BME280 at `0x76`.
+- Initializes I2C on GPIO `21`/`22`, the SSD1306 OLED at `0x3C`, the BH1750, and the BME280 at `0x76`.
 - Attempts WiFi reconnects at 10-second intervals after disconnection.
 - Starts ArduinoOTA after a WiFi connection is established.
 - Takes and uploads readings every 5 seconds.
+- Refreshes the OLED with current temperature, humidity, pressure and light values once per measurement cycle.
 - Uses a 4-second HTTP client timeout.
 - Logs structured JSON-style status messages to serial at `115200` baud.
 - Posts important connected-state events to `/device/logs` with a short
   timeout; WiFi-disconnected events remain serial-only.
-- Continues servicing WiFi, OTA, LED state and recovery logic if BME280
-  initialization fails, and retries BME280 initialization periodically.
+- Continues servicing WiFi, OTA, LED state and recovery logic if OLED or
+  BME280 initialization fails, and retries BME280 initialization periodically.
 
-The firmware currently identifies itself as `0.2.1-device-logs` through the
+The firmware currently identifies itself as `0.3.0-oled` through the
 `FIRMWARE_VERSION` constant. Change that constant when producing a new
 firmware build so reported versions remain useful.
 
@@ -321,7 +324,7 @@ Stores a lightweight ESP32 status event. `level` must be `info`, `warn` or
   "level": "error",
   "event": "upload_failed",
   "message": "Weather upload HTTP status -1, failure count 2",
-  "firmwareVersion": "0.2.1-device-logs",
+  "firmwareVersion": "0.3.0-oled",
   "uptimeSeconds": 420
 }
 ```
